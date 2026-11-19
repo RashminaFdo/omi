@@ -58,13 +58,23 @@ export interface I18nDict {
   trumpCaller: string;
   selectTrumpTitle: string;
   selectTrumpSubtitle: string;
+  orPickBlindCard: string;
+  blindCardLabel: (pos: 5 | 6 | 7 | 8) => string;
+  dealerRevealedCard: (dealer: string, selector: string, pos: 5 | 6 | 7 | 8) => string;
+  trumpIsNow: (suitName: string) => string;
+  dealingRemainingCards: string;
   waitingForTrump: (name: string) => string;
+  waitingForCardsAfterTrump: (name: string) => string;
   yourTurn: string;
   playersTurn: (name: string) => string;
-  mustFollowSuit: (suitName: string) => string;
-  canCutOrDiscard: string;
   trickWinnerBanner: (name: string) => string;
   cutBanner: string;
+  // Revoke (Rule Violation)
+  revokeTitle: string;
+  revokeSubtitle: (playerName: string, ledSuitName: string) => string;
+  revokePlayedLabel: string;
+  revokeHadInHandLabel: string;
+  revokePenaltyNote: (winningTeam: string) => string;
   // Hand & Match summary
   handComplete: string;
   matchComplete: string;
@@ -176,14 +186,27 @@ const en: I18nDict = {
   dealer: "Dealer",
   trumpCaller: "Trump Caller",
   selectTrumpTitle: "Choose Trump Suit (Thurumpu)",
-  selectTrumpSubtitle: "Pick based on your first 4 cards — 4 more will be dealt next.",
+  selectTrumpSubtitle: "Pick a suit from your first 4 cards — or draw a blind card below.",
+  orPickBlindCard: "Not happy with these 4? Pick 5th, 6th, 7th, or 8th card:",
+  blindCardLabel: (pos) => `${pos}th`,
+  dealerRevealedCard: (dealer, selector, pos) =>
+    `${dealer} reveals ${selector}'s ${pos}th card`,
+  trumpIsNow: (suitName) => `${suitName} is Trump!`,
+  dealingRemainingCards: "Dealing cards to all players...",
   waitingForTrump: (name) => `Waiting for ${name} to choose Trump (Thurumpu)...`,
+  waitingForCardsAfterTrump: (name) =>
+    `${name} is viewing their first 4 cards. Everyone else receives cards once Trump is called.`,
   yourTurn: "Your Turn",
   playersTurn: (name) => `${name}'s Turn`,
-  mustFollowSuit: (suitName) => `Must follow ${suitName}`,
-  canCutOrDiscard: "Void — Cut with Trump or discard any card",
   trickWinnerBanner: (name) => `${name} takes the trick`,
   cutBanner: "Kapanawa! (Cut)",
+  revokeTitle: "Rule Violation — Failed to Follow Suit!",
+  revokeSubtitle: (playerName, ledSuitName) =>
+    `${playerName} played another suit while still holding ${ledSuitName}!`,
+  revokePlayedLabel: "Played",
+  revokeHadInHandLabel: "Still in Hand",
+  revokePenaltyNote: (winningTeam) =>
+    `${winningTeam} wins the hand by forfeit!`,
   handComplete: "Hand Complete",
   matchComplete: "Match Victory!",
   winsHand: (team) => `${team} Wins the Hand`,
@@ -256,19 +279,20 @@ const en: I18nDict = {
       ],
     },
     {
-      title: "Two-Stage Deal & Trump (Thurumpu)",
+      title: "Two-Stage Deal & Blind 5th–8th Trump Card",
       points: [
-        "Each player is dealt 4 cards first.",
-        "The player to the dealer's right chooses the Trump suit (Thurumpu) using only those 4 cards.",
-        "Once Trump is chosen, the remaining 4 cards are dealt to everyone (8 cards each).",
+        "After shuffling, ONLY the Trump Selector receives their first 4 cards.",
+        "They can declare Trump (Thurumpu) from those 4 cards — or, if the 4 cards aren't good, pick their blind 5th, 6th, 7th, or 8th card.",
+        "If a blind card is picked, the dealer reveals ONLY that card to everyone and its suit becomes Trump (shown at the top of the table).",
+        "Everyone then receives their full 8 cards, and the Trump Selector leads Trick 1. Each new hand, the Trump Selector rotates anti-clockwise.",
       ],
     },
     {
-      title: "Trick Play & Cutting (Kapanawa)",
+      title: "Trick Play, Cutting (Kapanawa) & Revoke Rule",
       points: [
-        "The Trump caller leads the first trick; the winner of each trick leads the next.",
-        "Strict Follow-Suit: You MUST play a card of the led suit if you have one.",
-        "If void in the led suit, you may cut with a Trump card (Kapanawa) or discard any card.",
+        "You must follow the led suit if you have a card of that symbol. You are free to play any card from your hand without system hints.",
+        "If you DO have a card of the led suit and still play another suit or cut with a Trump card, you break the rule and the opposing team immediately wins the hand (+2 Keta)!",
+        "If you genuinely do not have the led suit, you may cut with Trump (Kapanawa) or discard any card.",
         "Highest Trump card wins the trick; if no Trump is played, highest card of the led suit wins.",
       ],
     },
@@ -343,14 +367,27 @@ const si: I18nDict = {
   dealer: "බෙදන්නා",
   trumpCaller: "තුරුම්පු අඬන්නා",
   selectTrumpTitle: "තුරුම්පු වර්ගය තෝරන්න",
-  selectTrumpSubtitle: "මුල් කාඩ් 4 බලා තුරුම්පු තෝරන්න — ඉතිරි කාඩ් 4 ඉන්පසු ලැබේ.",
+  selectTrumpSubtitle: "මුල් කාඩ් 4න් තුරුම්පු තෝරන්න — නැතිනම් පහතින් 5–8 කාඩ් එකක් අදින්න.",
+  orPickBlindCard: "මුල් කාඩ් 4 හොඳ නැද්ද? 5, 6, 7 හෝ 8 වෙනි කාඩ් එක තෝරන්න:",
+  blindCardLabel: (pos) => `${pos}වෙනි`,
+  dealerRevealedCard: (dealer, selector, pos) =>
+    `${dealer} විසින් ${selector} ගේ ${pos}වෙනි කාඩ්පත පෙන්වයි`,
+  trumpIsNow: (suitName) => `තුරුම්පු: ${suitName}!`,
+  dealingRemainingCards: "සැමට කාඩ් බෙදමින්...",
   waitingForTrump: (name) => `${name} තුරුම්පු තෝරන තෙක් රැඳී සිටින්න...`,
+  waitingForCardsAfterTrump: (name) =>
+    `${name} මුල් කාඩ් 4 බලමින් සිටී. තුරුම්පු තේරූ පසු සැමට කාඩ් ලැබේ.`,
   yourTurn: "ඔබේ වාරය",
   playersTurn: (name) => `${name} ගේ වාරය`,
-  mustFollowSuit: (suitName) => `${suitName} කාඩ් එකක් දැමිය යුතුයි`,
-  canCutOrDiscard: "වර්ගය නැත — තුරුම්පු වලින් කපනවා හෝ ඕනෑම කාඩ් එකක් දමන්න",
   trickWinnerBanner: (name) => `${name} ගොඩ දිනා ගත්තා`,
   cutBanner: "කපනවා!",
+  revokeTitle: "නීති කඩකිරීමක් — වර්ගය මග හැරියා!",
+  revokeSubtitle: (playerName, ledSuitName) =>
+    `${playerName} ළඟ ${ledSuitName} කාඩ්පතක් තිබියදී වෙනත් කාඩ්පතක් දැමුවා!`,
+  revokePlayedLabel: "දැමූ කාඩ්පත",
+  revokeHadInHandLabel: "අතේ තිබූ කාඩ්පත",
+  revokePenaltyNote: (winningTeam) =>
+    `එම වරද නිසා ${winningTeam} වටය ජය ගත්තා!`,
   handComplete: "වටය අවසන්",
   matchComplete: "තරග ජයග්‍රහණය!",
   winsHand: (team) => `${team} වටය ජය ගත්තා`,
@@ -423,20 +460,21 @@ const si: I18nDict = {
       ],
     },
     {
-      title: "අදියර දෙකේ බෙදීම සහ තුරුම්පු",
+      title: "මුල් කාඩ් 4 සහ 5–8 අන්ධ තුරුම්පු කාඩ්පත",
       points: [
-        "පළමුව සෑම ක්‍රීඩකයෙකුටම කාඩ් 4 බැගින් බෙදනු ලැබේ.",
-        "බෙදන්නාගේ දකුණු පස සිටින ක්‍රීඩකයා එම කාඩ් 4 පමණක් බලා තුරුම්පු වර්ගය තෝරයි.",
-        "තුරුම්පු තේරූ පසු ඉතිරි කාඩ් 4 බැගින් බෙදා සැමට කාඩ් 8 බැගින් ලැබේ.",
+        "කාඩ් ඇනූ පසු පළමුව තුරුම්පු තෝරන්නාට පමණක් මුල් කාඩ් 4 ලැබේ.",
+        "එම කාඩ් 4න් තුරුම්පු පැවසිය හැක — නැතිනම් හොඳ කාඩ් නැත්නම් 5, 6, 7 හෝ 8 වෙනි කාඩ්පත තෝරාගත හැක.",
+        "එවිට බෙදන්නා තෝරාගත් එම කාඩ්පත පමණක් සැමට පෙන්වා එහි වර්ගය තුරුම්පු ලෙස ප්‍රකාශ කරයි (මේසයේ ඉහළින් දිස්වේ).",
+        "ඉන්පසු සැමට කාඩ් 8 බැගින් ලැබී තුරුම්පු තෝරන්නා මුල් කාඩ්පත දමයි. ඊළඟ වටයේදී තුරුම්පු තෝරන්නා වාමාවර්තව මාරු වේ.",
       ],
     },
     {
-      title: "ගොඩ ගැසීම සහ කපනවා",
+      title: "ගොඩ ගැසීම, කපනවා සහ වැරදි කාඩ්පත් නීතිය",
       points: [
-        "පළමු ගොඩ ආරම්භ කරන්නේ තුරුම්පු තේරූ ක්‍රීඩකයාය; සෑම ගොඩක්ම ජයග්‍රහණය කරන්නා ඊළඟ ගොඩ අරඹයි.",
-        "මුලින් දැමූ වර්ගයේ කාඩ් තිබේ නම් අනිවාර්යයෙන්ම එම වර්ගයෙන්ම දැමිය යුතුය.",
-        "එම වර්ගය නොමැති නම් තුරුම්පු කාඩ් එකකින් කපනවා හෝ වෙනත් ඕනෑම කාඩ් එකක් දැමිය හැක.",
-        "ඉහළම තුරුම්පු කාඩ් එක ගොඩ දිනයි; තුරුම්පු නැත්නම් මුලින් දැමූ වර්ගයේ ඉහළම කාඩ් එක දිනයි.",
+        "මුලින් දැමූ වර්ගයේ කාඩ් අතේ තිබේ නම් එම වර්ගයෙන්ම දැමිය යුතුය. කිසිදු කාඩ්පතක් අවහිර නොකෙරේ.",
+        "එම වර්ගයේ කාඩ්පතක් අතේ තිබියදී වෙනත් කාඩ්පතක් හෝ තුරුම්පු කාඩ්පතක් දැමුවහොත් ප්‍රතිවාදී පිල එම වටය ක්ෂණිකව ජය ගනී (කැට +2)!",
+        "එම වර්ගය අතේ නොමැති නම් තුරුම්පු වලින් කපනවා හෝ ඕනෑම කාඩ්පතක් දැමිය හැක.",
+        "ඉහළම තුරුම්පු කාඩ්පත ගොඩ දිනයි; තුරුම්පු නැත්නම් මුලින් දැමූ වර්ගයේ ඉහළම කාඩ්පත දිනයි.",
       ],
     },
     {

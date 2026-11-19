@@ -1,8 +1,10 @@
 import type {
+  BlindCardPosition,
   Card,
   GameState,
   HandResult,
   Rank,
+  RevokeInfo,
   SeatIndex,
   Suit,
   TeamId,
@@ -42,6 +44,7 @@ export const SUIT_ORDER: Record<Suit, number> = {
 
 export const TARGET_TOKENS = 10;
 export const TOTAL_KETA_TOKENS = 20;
+export const REVOKE_PENALTY_TOKENS = 2;
 
 /**
  * Team A: Seats 0 & 2 (partners across the table)
@@ -51,12 +54,16 @@ export function getTeam(seat: SeatIndex): TeamId {
   return seat === 0 || seat === 2 ? "A" : "B";
 }
 
+export function getOpposingTeam(team: TeamId): TeamId {
+  return team === "A" ? "B" : "A";
+}
+
 export function getPartnerSeat(seat: SeatIndex): SeatIndex {
   return ((seat + 2) % 4) as SeatIndex;
 }
 
 /**
- * Counter-clockwise turn & dealing direction:
+ * Counter-clockwise (anti-clockwise) turn & dealing direction:
  * Seat 0 (Bottom) -> Seat 1 (Right) -> Seat 2 (Top) -> Seat 3 (Left) -> Seat 0
  */
 export function nextSeatCCW(seat: SeatIndex): SeatIndex {
@@ -98,9 +105,12 @@ export function sortHand(cards: Card[], trumpSuit: Suit | null = null): Card[] {
 }
 
 /**
- * Deal a new Omi hand in Stage 1:
- * - 4 cards dealt counter-clockwise starting from dealer's right (trumpCaller)
- * - Remaining 4 cards stored in pendingSecondDeal until trumpSuit is selected
+ * Authentic Sri Lankan Omi Stage 1 Deal:
+ * - Shuffles 32-card deck.
+ * - Deals ONLY the first 4 cards to the Trump Selector (dealer's anti-clockwise right).
+ * - Reserves the selector's 5th, 6th, 7th, and 8th cards (in exact deck order)
+ *   AND all 8 cards for each of the other 3 players in pendingSecondDeal.
+ * - Everyone else receives their cards only after Trump is decided!
  */
 export function createHandState(params: {
   handNumber: number;
@@ -113,23 +123,31 @@ export function createHandState(params: {
   const deck = shuffleDeck(createDeck());
   const trumpCaller = nextSeatCCW(params.dealerSeat);
 
-  const stage1: Record<string, Card[]> = { "0": [], "1": [], "2": [], "3": [] };
-  const stage2: Record<string, Card[]> = { "0": [], "1": [], "2": [], "3": [] };
+  const stage1Hands: Record<string, Card[]> = {
+    "0": [],
+    "1": [],
+    "2": [],
+    "3": [],
+  };
+  const pending: Record<string, Card[]> = {
+    "0": [],
+    "1": [],
+    "2": [],
+    "3": [],
+  };
 
-  // Deal 4 cards to each player counter-clockwise starting from dealer's right
-  let idx = 0;
-  let seat = trumpCaller;
-  for (let p = 0; p < 4; p++) {
-    stage1[String(seat)] = sortHand(deck.slice(idx, idx + 4));
-    idx += 4;
-    seat = nextSeatCCW(seat);
-  }
+  // Deal first 4 cards ONLY to the trump selector
+  stage1Hands[String(trumpCaller)] = sortHand(deck.slice(0, 4));
 
-  // Reserve second 4 cards per player
-  seat = trumpCaller;
-  for (let p = 0; p < 4; p++) {
-    stage2[String(seat)] = deck.slice(idx, idx + 4);
-    idx += 4;
+  // Reserve 5th, 6th, 7th, 8th cards for trump selector (preserve exact order!)
+  pending[String(trumpCaller)] = deck.slice(4, 8);
+
+  // Reserve 8 cards each for the remaining 3 players in counter-clockwise order
+  let idx = 8;
+  let seat = nextSeatCCW(trumpCaller);
+  for (let p = 0; p < 3; p++) {
+    pending[String(seat)] = deck.slice(idx, idx + 8);
+    idx += 8;
     seat = nextSeatCCW(seat);
   }
 
@@ -139,6 +157,8 @@ export function createHandState(params: {
     dealerSeat: params.dealerSeat,
     trumpCaller,
     trumpSuit: null,
+    revealedTrumpCard: null,
+    revealedTrumpCardPosition: null,
     currentTurn: trumpCaller,
     turnStartedAt: params.now ?? Date.now(),
     trickNumber: 1,
@@ -147,8 +167,8 @@ export function createHandState(params: {
     lastTrickWinner: null,
     lastTrickWinningCardId: null,
     lastTrickCut: false,
-    hands: stage1,
-    pendingSecondDeal: stage2,
+    hands: stage1Hands,
+    pendingSecondDeal: pending,
     tricksWon: { A: 0, B: 0 },
     scores: { ...params.scores },
     carryOverBonus: params.carryOverBonus,
@@ -159,8 +179,9 @@ export function createHandState(params: {
 }
 
 /**
- * Stage 2: Once trumpCaller chooses trumpSuit from their initial 4 cards,
- * deal the remaining 4 cards to every player (8 cards total each) and begin trick 1.
+ * Option A: Trump Selector calls Trump directly from their first 4 cards.
+ * Deals remaining 4 cards to selector and all 8 cards to everyone else,
+ * then selector leads Trick 1.
  */
 export function applyTrumpSelection(
   state: GameState,
@@ -177,15 +198,17 @@ export function applyTrumpSelection(
 
   const mergedHands: Record<string, Card[]> = {};
   for (const s of ["0", "1", "2", "3"]) {
-    const first4 = state.hands?.[s] ?? [];
-    const second4 = state.pendingSecondDeal?.[s] ?? [];
-    mergedHands[s] = sortHand([...first4, ...second4], suit);
+    const existing = state.hands?.[s] ?? [];
+    const rest = state.pendingSecondDeal?.[s] ?? [];
+    mergedHands[s] = sortHand([...existing, ...rest], suit);
   }
 
   return {
     ...state,
     phase: "PLAYING",
     trumpSuit: suit,
+    revealedTrumpCard: null,
+    revealedTrumpCardPosition: null,
     hands: mergedHands,
     pendingSecondDeal: null,
     currentTurn: state.trumpCaller,
@@ -196,10 +219,77 @@ export function applyTrumpSelection(
 }
 
 /**
- * Strict Sri Lankan Omi follow-suit rule:
- * - If leading (trick empty), all cards in hand are legal.
- * - If holding at least one card of the led suit, ONLY cards of the led suit are legal.
- * - If void in led suit, ANY card in hand is legal (cut with trump or discard).
+ * Option B: Trump Selector dislikes their first 4 cards and chooses the 5th, 6th, 7th, or 8th card.
+ * The dealer reveals ONLY that single selected card to all players and declares its suit as Trump.
+ * Enters REVEAL_TRUMP_CARD phase before dealing everyone's full 8 cards.
+ */
+export function applyBlindTrumpCardSelection(
+  state: GameState,
+  seat: SeatIndex,
+  position: BlindCardPosition,
+  now = Date.now()
+): GameState {
+  if (state.phase !== "SELECT_TRUMP") {
+    throw new Error("Cannot pick a blind trump card outside SELECT_TRUMP phase.");
+  }
+  if (seat !== state.trumpCaller) {
+    throw new Error("Only the trump caller may choose a blind trump card.");
+  }
+
+  const selectorPending = state.pendingSecondDeal?.[String(seat)] ?? [];
+  const cardIndex = position - 5; // 5->0, 6->1, 7->2, 8->3
+  const selectedCard = selectorPending[cardIndex];
+  if (!selectedCard) {
+    throw new Error("Selected blind card position is unavailable.");
+  }
+
+  return {
+    ...state,
+    phase: "REVEAL_TRUMP_CARD",
+    trumpSuit: selectedCard.suit,
+    revealedTrumpCard: selectedCard,
+    revealedTrumpCardPosition: position,
+    turnStartedAt: now,
+    actionSeq: state.actionSeq + 1,
+  };
+}
+
+/**
+ * After everyone has seen the revealed 5th/6th/7th/8th trump card,
+ * deal all remaining cards to every player (8 cards each) and start Trick 1
+ * with the trump caller leading.
+ */
+export function finalizeBlindTrumpDeal(
+  state: GameState,
+  now = Date.now()
+): GameState {
+  if (state.phase !== "REVEAL_TRUMP_CARD" || !state.trumpSuit) {
+    return state;
+  }
+
+  const mergedHands: Record<string, Card[]> = {};
+  for (const s of ["0", "1", "2", "3"]) {
+    const existing = state.hands?.[s] ?? [];
+    const rest = state.pendingSecondDeal?.[s] ?? [];
+    mergedHands[s] = sortHand([...existing, ...rest], state.trumpSuit);
+  }
+
+  return {
+    ...state,
+    phase: "PLAYING",
+    hands: mergedHands,
+    pendingSecondDeal: null,
+    currentTurn: state.trumpCaller,
+    trickLeader: state.trumpCaller,
+    turnStartedAt: now,
+    actionSeq: state.actionSeq + 1,
+  };
+}
+
+/**
+ * Returns cards that strictly follow the led suit (used by AI bots and revoke detection).
+ * Note: Human players are NOT blocked in the UI — they may play any card in their hand,
+ * and failing to follow suit while holding the led suit triggers a Revoke loss!
  */
 export function getLegalCards(hand: Card[], currentTrick: TrickPlay[]): Card[] {
   if (!hand || hand.length === 0) return [];
@@ -259,9 +349,11 @@ export function determineTrickWinner(
 }
 
 /**
- * Apply a single card play.
- * If it's the 4th card of the trick, transitions to TRICK_COMPLETE so clients can
- * display the winning highlight & collect animation before advanceAfterTrick().
+ * Apply a card play.
+ * - Players may play ANY card in their hand (no forced UI restriction).
+ * - If a player holds a card of the led suit, yet plays a different suit (including a trump card),
+ *   they commit a REVOKE and the opposing team immediately wins the hand!
+ * - Otherwise, normal trick play proceeds; on the 4th card, transitions to TRICK_COMPLETE.
  */
 export function applyCardPlay(
   state: GameState,
@@ -283,14 +375,88 @@ export function applyCardPlay(
   const hand = state.hands?.[seatKey] ?? [];
   const trick = state.currentTrick ?? [];
 
-  if (!isLegalPlay(hand, cardId, trick)) {
-    throw new Error("Illegal card play: must follow led suit if able.");
+  const playedCard = hand.find((c) => c.id === cardId);
+  if (!playedCard) {
+    throw new Error("Card is not in this player's hand.");
   }
 
-  const playedCard = hand.find((c) => c.id === cardId)!;
   const remainingHand = hand.filter((c) => c.id !== cardId);
-
   const ledSuit = trick.length > 0 ? trick[0].card.suit : null;
+
+  // Check for Revoke (failing to follow led suit while holding a card of that suit)
+  if (ledSuit !== null && playedCard.suit !== ledSuit) {
+    const heldMatchingCard = hand.find((c) => c.suit === ledSuit);
+    if (heldMatchingCard) {
+      const offendingTeam = getTeam(seat);
+      const winningTeam = getOpposingTeam(offendingTeam);
+      const trumpTeam = getTeam(state.trumpCaller);
+      const baseTokens = REVOKE_PENALTY_TOKENS;
+      const bonusTokensApplied = state.carryOverBonus;
+      const totalTokensAwarded = baseTokens + bonusTokensApplied;
+
+      const revokeInfo: RevokeInfo = {
+        offendingSeat: seat,
+        offendingTeam,
+        winningTeam,
+        ledSuit,
+        playedCard,
+        heldMatchingCard,
+      };
+
+      const result: HandResult = {
+        handNumber: state.handNumber,
+        trumpSuit: state.trumpSuit,
+        trumpCaller: state.trumpCaller,
+        trumpTeam,
+        tricksWon: { ...state.tricksWon },
+        winnerTeam: winningTeam,
+        outcomeType: "REVOKE",
+        baseTokens,
+        bonusTokensApplied,
+        totalTokensAwarded,
+        nextCarryOverBonus: 0,
+        revokeInfo,
+      };
+
+      const updatedScores: Record<TeamId, number> = {
+        A: state.scores.A + (winningTeam === "A" ? totalTokensAwarded : 0),
+        B: state.scores.B + (winningTeam === "B" ? totalTokensAwarded : 0),
+      };
+
+      let matchWinner: TeamId | null = null;
+      if (updatedScores.A >= TARGET_TOKENS) {
+        matchWinner = "A";
+      } else if (updatedScores.B >= TARGET_TOKENS) {
+        matchWinner = "B";
+      }
+
+      const updatedTrick: TrickPlay[] = [
+        ...trick,
+        {
+          seat,
+          card: playedCard,
+          isCut: playedCard.suit === state.trumpSuit && ledSuit !== state.trumpSuit,
+        },
+      ];
+
+      return {
+        ...state,
+        phase: matchWinner ? "GAME_OVER" : "HAND_SUMMARY",
+        hands: {
+          ...state.hands,
+          [seatKey]: remainingHand,
+        },
+        currentTrick: updatedTrick,
+        scores: updatedScores,
+        carryOverBonus: 0,
+        lastHandResult: result,
+        matchWinner,
+        turnStartedAt: now,
+        actionSeq: state.actionSeq + 1,
+      };
+    }
+  }
+
   const isCut =
     ledSuit !== null &&
     ledSuit !== state.trumpSuit &&
@@ -484,7 +650,7 @@ export function advanceAfterTrick(
 }
 
 /**
- * Rotate dealer counter-clockwise and deal the next hand.
+ * Rotate dealer (and therefore trump selector!) counter-clockwise and deal the next hand.
  */
 export function startNextHand(state: GameState, now = Date.now()): GameState {
   const nextDealer = nextSeatCCW(state.dealerSeat);
@@ -502,7 +668,11 @@ export function startNextHand(state: GameState, now = Date.now()): GameState {
 // Smart Legal AI Bot Heuristics
 // ============================================================================
 
-export function chooseBotTrumpSuit(initialFourCards: Card[]): Suit {
+export type BotTrumpDecision =
+  | { type: "SUIT"; suit: Suit }
+  | { type: "BLIND"; position: BlindCardPosition };
+
+export function chooseBotTrumpDecision(initialFourCards: Card[]): BotTrumpDecision {
   const suitScores: Record<Suit, number> = { S: 0, H: 0, D: 0, C: 0 };
   const rankBonus: Record<Rank, number> = {
     A: 5.5,
@@ -516,7 +686,6 @@ export function chooseBotTrumpSuit(initialFourCards: Card[]): Suit {
   };
 
   for (const card of initialFourCards) {
-    // Length + high-card strength
     suitScores[card.suit] += 2.2 + rankBonus[card.rank];
   }
 
@@ -528,7 +697,21 @@ export function chooseBotTrumpSuit(initialFourCards: Card[]): Suit {
       bestSuit = suit;
     }
   }
-  return bestSuit;
+
+  // If the bot's first 4 cards are weak (no strong suit or high honor), draw blind 5th-8th card!
+  if (bestScore < 7.2) {
+    const positions: BlindCardPosition[] = [5, 6, 7, 8];
+    const picked = positions[Math.floor(Math.random() * positions.length)];
+    return { type: "BLIND", position: picked };
+  }
+
+  return { type: "SUIT", suit: bestSuit };
+}
+
+export function chooseBotTrumpSuit(initialFourCards: Card[]): Suit {
+  const decision = chooseBotTrumpDecision(initialFourCards);
+  if (decision.type === "SUIT") return decision.suit;
+  return initialFourCards[0]?.suit ?? "S";
 }
 
 export function chooseBotCard(
@@ -547,19 +730,19 @@ export function chooseBotCard(
 
   // Leading a trick
   if (!currentTrick || currentTrick.length === 0) {
-    // Prefer Aces/Kings in non-trump suits to cash winners early
     const nonTrumpHigh = byRankDesc.find(
       (c) => c.suit !== trumpSuit && (c.rank === "A" || c.rank === "K")
     );
     if (nonTrumpHigh) return nonTrumpHigh;
 
-    // If bot has 3+ trumps including Ace or King, draw out enemy trumps
     const trumps = byRankDesc.filter((c) => c.suit === trumpSuit);
-    if (trumps.length >= 3 && (trumps[0].rank === "A" || trumps[0].rank === "K")) {
+    if (
+      trumps.length >= 3 &&
+      (trumps[0].rank === "A" || trumps[0].rank === "K")
+    ) {
       return trumps[0];
     }
 
-    // Otherwise lead lowest non-trump card (preserving trumps for cutting)
     const nonTrumps = byRankAsc.filter((c) => c.suit !== trumpSuit);
     if (nonTrumps.length > 0) return nonTrumps[0];
 
@@ -572,7 +755,6 @@ export function chooseBotCard(
   const partnerWinning = currentWinner.seat === partnerSeat;
   const isLastToPlay = currentTrick.length === 3;
 
-  // Check if partner is safely winning (last player or holds Ace of trump / Ace of led suit)
   const partnerLikelySafe =
     partnerWinning &&
     (isLastToPlay ||
@@ -582,12 +764,10 @@ export function chooseBotCard(
         currentWinner.card.rank === "A"));
 
   if (partnerLikelySafe) {
-    // Dump lowest non-trump if possible
     const nonTrumps = byRankAsc.filter((c) => c.suit !== trumpSuit);
     return nonTrumps.length > 0 ? nonTrumps[0] : byRankAsc[0];
   }
 
-  // Find cards that beat the current winning play
   const winningCandidates = byRankAsc.filter((card) => {
     const simulated: TrickPlay[] = [
       ...currentTrick,
@@ -597,22 +777,17 @@ export function chooseBotCard(
   });
 
   if (winningCandidates.length > 0) {
-    // Prefer winning without spending trump if following suit can win
     const nonTrumpWinners = winningCandidates.filter(
       (c) => c.suit !== trumpSuit
     );
     if (nonTrumpWinners.length > 0) {
-      // Win cheaply if last player, otherwise play strong card if mid-trick
       return isLastToPlay
         ? nonTrumpWinners[0]
         : nonTrumpWinners[nonTrumpWinners.length - 1];
     }
-
-    // Cut (Kapanawa) with the cheapest winning trump card!
     return winningCandidates[0];
   }
 
-  // Cannot win trick: discard lowest non-trump card, or lowest card overall
   const nonTrumps = byRankAsc.filter((c) => c.suit !== trumpSuit);
   return nonTrumps.length > 0 ? nonTrumps[0] : byRankAsc[0];
 }

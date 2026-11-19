@@ -9,14 +9,20 @@ import { LobbyView } from "@/components/LobbyView";
 import { TableBackdrop } from "@/components/TableBackdrop";
 import { TopBar } from "@/components/TopBar";
 import { ensureAnonymousUser } from "@/lib/firebase";
-import { chooseBotCard, chooseBotTrumpSuit } from "@/lib/omiEngine";
+import {
+  chooseBotCard,
+  chooseBotTrumpDecision,
+  chooseBotTrumpSuit,
+} from "@/lib/omiEngine";
 import {
   attachPresence,
+  commitBlindTrumpDeal,
   commitTrickAdvance,
   findPlayerSeat,
   joinOrReconnectSeat,
   leaveLobbySeat,
   normalizeCode,
+  submitBlindTrumpCard,
   submitCardPlay,
   submitTrumpChoice,
   subscribeToRoom,
@@ -134,6 +140,16 @@ export default function RoomPage({
     return () => window.clearTimeout(timer);
   }, [isOrchestrator, code, gamePhase, actionSeq, fast, game]);
 
+  // 4b. Orchestrator Engine: Auto-Deal Everyone After Blind 5th-8th Trump Card Reveal
+  useEffect(() => {
+    if (!isOrchestrator || !game || game.phase !== "REVEAL_TRUMP_CARD") return;
+    const delay = fast ? 1400 : 2400;
+    const timer = window.setTimeout(() => {
+      commitBlindTrumpDeal(code, game.actionSeq).catch(() => {});
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [isOrchestrator, code, gamePhase, actionSeq, fast, game]);
+
   // 5. Orchestrator Engine: Smart AI Bot Moves (Trump Selection & Trick Play)
   useEffect(() => {
     if (!isOrchestrator || !room || !game) return;
@@ -151,8 +167,14 @@ export default function RoomPage({
       if (hand.length === 0) return;
 
       if (game.phase === "SELECT_TRUMP") {
-        const suit = chooseBotTrumpSuit(hand);
-        submitTrumpChoice(code, actingSeat, suit).catch(() => {});
+        const decision = chooseBotTrumpDecision(hand);
+        if (decision.type === "BLIND") {
+          submitBlindTrumpCard(code, actingSeat, decision.position).catch(
+            () => {}
+          );
+        } else {
+          submitTrumpChoice(code, actingSeat, decision.suit).catch(() => {});
+        }
       } else if (game.phase === "PLAYING" && game.trumpSuit) {
         const card = chooseBotCard(
           hand,

@@ -16,6 +16,8 @@ export type KapothiLabel = "kapothi" | "basthe";
 
 export type TurnTimerOption = 0 | 15 | 30 | 45;
 
+export type BlindCardPosition = 5 | 6 | 7 | 8;
+
 export interface SeatPlayer {
   uid: string;
   name: string;
@@ -35,6 +37,15 @@ export interface TrickPlay {
   isCut?: boolean;
 }
 
+export interface RevokeInfo {
+  offendingSeat: SeatIndex;
+  offendingTeam: TeamId;
+  winningTeam: TeamId;
+  ledSuit: Suit;
+  playedCard: Card;
+  heldMatchingCard: Card;
+}
+
 export interface HandResult {
   handNumber: number;
   trumpSuit: Suit;
@@ -42,15 +53,22 @@ export interface HandResult {
   trumpTeam: TeamId;
   tricksWon: Record<TeamId, number>;
   winnerTeam: TeamId | "TIE";
-  outcomeType: "NORMAL_TRUMP" | "NORMAL_NON_TRUMP" | "KAPOTHI" | "SEPORU";
+  outcomeType:
+    | "NORMAL_TRUMP"
+    | "NORMAL_NON_TRUMP"
+    | "KAPOTHI"
+    | "SEPORU"
+    | "REVOKE";
   baseTokens: number;
   bonusTokensApplied: number;
   totalTokensAwarded: number;
   nextCarryOverBonus: number;
+  revokeInfo?: RevokeInfo;
 }
 
 export type GamePhase =
   | "SELECT_TRUMP"
+  | "REVEAL_TRUMP_CARD"
   | "PLAYING"
   | "TRICK_COMPLETE"
   | "HAND_SUMMARY"
@@ -62,6 +80,8 @@ export interface GameState {
   dealerSeat: SeatIndex;
   trumpCaller: SeatIndex;
   trumpSuit: Suit | null;
+  revealedTrumpCard: Card | null; // set when trumpCaller picks 5th/6th/7th/8th blind card
+  revealedTrumpCardPosition: BlindCardPosition | null;
   currentTurn: SeatIndex;
   turnStartedAt: number;
   trickNumber: number; // 1..8
@@ -71,7 +91,7 @@ export interface GameState {
   lastTrickWinningCardId: string | null;
   lastTrickCut: boolean;
   hands: Record<string, Card[]>; // seat index "0".."3" -> cards currently in hand
-  pendingSecondDeal: Record<string, Card[]> | null; // remaining 4 cards per seat before trump chosen
+  pendingSecondDeal: Record<string, Card[]> | null; // remaining cards before trump deal completes
   tricksWon: Record<TeamId, number>;
   scores: Record<TeamId, number>; // Keta tokens, first to 10 wins
   carryOverBonus: number; // Seporu bonus stack

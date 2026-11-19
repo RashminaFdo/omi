@@ -10,12 +10,15 @@ import {
 import { ensureAnonymousUser, getFirebaseDb } from "./firebase";
 import {
   advanceAfterTrick,
+  applyBlindTrumpCardSelection,
   applyCardPlay,
   applyTrumpSelection,
   createHandState,
+  finalizeBlindTrumpDeal,
   startNextHand,
 } from "./omiEngine";
 import type {
+  BlindCardPosition,
   Card,
   EmoteEvent,
   EmoteKey,
@@ -69,10 +72,12 @@ export function normalizeGameState(raw: GameState | null | undefined): GameState
   return {
     phase: raw.phase,
     handNumber: raw.handNumber ?? 1,
-    dealerSeat: (raw.dealerSeat ?? 0) as SeatIndex,
-    trumpCaller: (raw.trumpCaller ?? 1) as SeatIndex,
+    dealerSeat: (raw.dealerSeat ?? 3) as SeatIndex,
+    trumpCaller: (raw.trumpCaller ?? 0) as SeatIndex,
     trumpSuit: raw.trumpSuit ?? null,
-    currentTurn: (raw.currentTurn ?? 1) as SeatIndex,
+    revealedTrumpCard: raw.revealedTrumpCard ?? null,
+    revealedTrumpCardPosition: raw.revealedTrumpCardPosition ?? null,
+    currentTurn: (raw.currentTurn ?? 0) as SeatIndex,
     turnStartedAt: raw.turnStartedAt ?? Date.now(),
     trickNumber: raw.trickNumber ?? 1,
     trickLeader: (raw.trickLeader ?? 1) as SeatIndex,
@@ -455,7 +460,9 @@ export async function startMatch(code: string): Promise<void> {
     );
     if (!allFilled) return current;
 
-    const initialDealer = (Math.floor(Math.random() * 4) as SeatIndex);
+    // Seat 3 deals Hand 1 so Seat 0 (the first anti-clockwise player) selects Trump first,
+    // then Seat 1 -> Seat 2 -> Seat 3 anti-clockwise in subsequent hands!
+    const initialDealer: SeatIndex = 3;
     room.status = "playing";
     room.game = createHandState({
       handNumber: 1,
@@ -485,19 +492,67 @@ export async function submitTrumpChoice(
   });
 }
 
+export async function submitBlindTrumpCard(
+  code: string,
+  seat: SeatIndex,
+  position: BlindCardPosition
+): Promise<void> {
+  const db = getFirebaseDb();
+  await runTransaction(ref(db, `rooms/${code}/game`), (current) => {
+    const game = normalizeGameState(current as GameState | null);
+    if (!game || game.phase !== "SELECT_TRUMP" || game.trumpCaller !== seat) {
+      return current;
+    }
+    try {
+      return applyBlindTrumpCardSelection(game, seat, position, Date.now());
+    } catch {
+      return current;
+    }
+  });
+}
+
+export async function commitBlindTrumpDeal(
+  code: string,
+  expectedActionSeq: number
+): Promise<void> {
+  const db = getFirebaseDb();
+  await runTransaction(ref(db, `rooms/${code}/game`), (current) => {
+    const game = normalizeGameState(current as GameState | null);
+    if (
+      !game ||
+      game.phase !== "REVEAL_TRUMP_CARD" ||
+      game.actionSeq !== expectedActionSeq
+    ) {
+      return current;
+    }
+    return finalizeBlindTrumpDeal(game, Date.now());
+  });
+}
+
 export async function submitCardPlay(
   code: string,
   seat: SeatIndex,
   cardId: string
 ): Promise<void> {
   const db = getFirebaseDb();
-  await runTransaction(ref(db, `rooms/${code}/game`), (current) => {
-    const game = normalizeGameState(current as GameState | null);
-    if (!game || game.phase !== "PLAYING" || game.currentTurn !== seat) {
+  await runTransaction(ref(db, `rooms/${code}`), (current) => {
+    const room = normalizeRoomData(current as RoomData | null);
+    if (
+      !room ||
+      !room.game ||
+      room.game.phase !== "PLAYING" ||
+      room.game.currentTurn !== seat
+    ) {
       return current;
     }
     try {
-      return applyCardPlay(game, seat, cardId, Date.now());
+      const nextGame = applyCardPlay(room.game, seat, cardId, Date.now());
+      room.game = nextGame;
+      if (nextGame.phase === "GAME_OVER") {
+        room.status = "finished";
+      }
+      room.updatedAt = Date.now();
+      return room;
     } catch {
       return current;
     }
