@@ -38,9 +38,6 @@ yarn-error.log*
 .firebase/
 firebase-debug.log*
 
-# raw source logo (copied to public/omi-logo.png)
-Gemini_Generated_Image_*.png
-
 # vercel
 .vercel
 

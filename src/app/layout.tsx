@@ -28,12 +28,27 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://omi-fawn.vercel.app"),
   title: "Omi (ඕමි) — Sri Lankan Multiplayer Card Game",
   description:
     "Play authentic 4-player Sri Lankan Omi (ඕමි) online in real time with friends. Create a room, share a link or 6-character code, and race to 10 Keta tokens.",
   icons: {
     icon: "/omi-logo.png",
+    shortcut: "/omi-logo.png",
     apple: "/omi-logo.png",
+  },
+  openGraph: {
+    title: "Omi (ඕමි) — The Sri Lankan Card Game",
+    description:
+      "Join a live 4-player Sri Lankan Omi table with friends via invite link or 6-character code.",
+    images: [{ url: "/omi-logo.png", alt: "Omi — The Sri Lankan Card Game" }],
+  },
+  twitter: {
+    card: "summary",
+    title: "Omi (ඕමි) — The Sri Lankan Card Game",
+    description:
+      "Play real-time 4-player Sri Lankan Omi online with friends.",
+    images: ["/omi-logo.png"],
   },
 };
 
