@@ -66,10 +66,10 @@ const TRICK_CARD_OFFSET: Record<
   number,
   { x: number; y: number; enterX: number; enterY: number }
 > = {
-  0: { x: 0, y: 34, enterX: 0, enterY: 120 },
-  1: { x: 52, y: 0, enterX: 140, enterY: 0 },
-  2: { x: 0, y: -34, enterX: 0, enterY: -120 },
-  3: { x: -52, y: 0, enterX: -140, enterY: 0 },
+  0: { x: 0, y: 28, enterX: 0, enterY: 110 },
+  1: { x: 42, y: 0, enterX: 130, enterY: 0 },
+  2: { x: 0, y: -28, enterX: 0, enterY: -110 },
+  3: { x: -42, y: 0, enterX: -130, enterY: 0 },
 };
 
 export function GameTable({
@@ -472,7 +472,7 @@ export function GameTable({
   const myWonTricks = game.wonTricksBySeat?.[String(baseSeat)] ?? [];
 
   return (
-    <div className="relative z-10 flex-1 h-[calc(100dvh-52px)] flex flex-col justify-between overflow-hidden px-1.5 sm:px-5 pt-1.5 pb-2 select-none">
+    <div className="relative flex-1 min-h-0 flex flex-col justify-between overflow-hidden px-1.5 sm:px-5 pt-1 pb-1.5 sm:pt-1.5 sm:pb-2 select-none">
       {/* Top HUD Row: Keta Tokens | Tricks | Trump Symbol Only */}
       <div className="mx-auto w-full max-w-6xl flex flex-wrap items-center justify-between gap-1.5 sm:gap-2 z-20">
         {/* Desktop full 20-token stack; Mobile compact score chip */}
@@ -581,7 +581,7 @@ export function GameTable({
           <div className="z-20 shrink-0">{renderSeatBadge(3)}</div>
 
           {/* Center Trick Mat */}
-          <div className="relative flex-1 max-w-[260px] xs:max-w-[300px] sm:max-w-[440px] min-h-[155px] sm:min-h-[215px] rounded-[36px] sm:rounded-[48px] border border-amber-300/25 bg-black/20 shadow-[inset_0_0_36px_rgba(0,0,0,0.45)] flex items-center justify-center px-2 py-2">
+          <div className="relative flex-1 max-w-[235px] xs:max-w-[280px] sm:max-w-[440px] min-h-[135px] sm:min-h-[210px] rounded-[30px] sm:rounded-[48px] border border-amber-300/25 bg-black/20 shadow-[inset_0_0_36px_rgba(0,0,0,0.45)] flex items-center justify-center px-1.5 sm:px-2 py-1.5 sm:py-2">
             {/* Subtle Center Crest Watermark */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -812,14 +812,14 @@ export function GameTable({
         </div>
       </div>
 
-      {/* Bottom Area: Seat Badge + Turn Status + Player's Own Won Pile + Fanned Hand + Emotes */}
-      <div className="relative z-20 mx-auto w-full max-w-4xl flex flex-col items-center">
-        <div className="mb-1 sm:mb-1.5 flex flex-wrap items-center justify-center gap-2">
+      {/* Bottom Area: Seat Badge + Turn Status + Player's Own Won Pile + Emotes + Fanned Hand */}
+      <div className="relative z-20 shrink-0 mx-auto w-full max-w-4xl flex flex-col items-center">
+        <div className="mb-1 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
           {renderSeatBadge(0)}
 
           {game.phase === "PLAYING" ? (
             <div
-              className={`rounded-full px-3 py-0.5 sm:py-1 text-[11px] sm:text-xs font-bold border backdrop-blur-md ${
+              className={`rounded-full px-2.5 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs font-bold border backdrop-blur-md ${
                 isMyPlayTurn
                   ? "bg-amber-400/20 border-amber-400 text-amber-200 shadow-[0_0_16px_rgba(251,191,36,0.3)]"
                   : "bg-black/40 border-white/15 text-white/75"
@@ -835,18 +835,59 @@ export function GameTable({
             trumpSuit={game.trumpSuit}
             placement="bottom"
           />
+
+          {/* Quick Emotes Button inside status row so it never overlaps cards on mobile */}
+          {mySeat !== null ? (
+            <div className="relative z-30">
+              <AnimatePresence>
+                {emoteOpen ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.92 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.92 }}
+                    className="absolute bottom-10 right-0 w-44 sm:w-52 rounded-2xl border border-white/15 bg-[#0c1412]/96 p-1.5 shadow-2xl grid grid-cols-1 gap-1"
+                  >
+                    {EMOTE_KEYS.map((key) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => handleEmote(key)}
+                        className="flex items-center gap-2 rounded-xl px-2.5 py-1.5 sm:py-2 text-left text-xs font-semibold text-white/90 hover:bg-amber-400/20 hover:text-amber-200 transition"
+                      >
+                        <span>{dict.emotes[key].emoji}</span>
+                        <span>{dict.emotes[key].label}</span>
+                      </button>
+                    ))}
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setEmoteOpen((v) => !v);
+                  soundEngine.playClick();
+                }}
+                className="rounded-full border border-amber-400/40 bg-black/60 hover:bg-amber-400/20 p-1.5 sm:p-2 text-amber-300 shadow-lg backdrop-blur-md transition"
+                aria-label="Emotes"
+                title="Emotes"
+              >
+                <MessageSquareHeart className="w-4 h-4" />
+              </button>
+            </div>
+          ) : null}
         </div>
 
         {/* Fanned Hand — Super Mobile Friendly, zero dimming/hints */}
-        <div className="relative w-full flex items-end justify-center pt-2 pb-1 min-h-[106px] sm:min-h-[138px]">
-          <div className="flex items-end justify-center -space-x-6 xs:-space-x-5 sm:-space-x-4 md:-space-x-3 px-2 max-w-full">
+        <div className="relative w-full flex items-end justify-center pt-1.5 pb-1 min-h-[92px] sm:min-h-[132px]">
+          <div className="flex items-end justify-center -space-x-4 xs:-space-x-3.5 sm:-space-x-4 md:-space-x-3 px-1 max-w-full">
             <AnimatePresence initial={false}>
               {myHand.map((card, index) => {
                 const count = myHand.length;
                 const mid = (count - 1) / 2;
                 const offset = index - mid;
-                const rotateDeg = offset * (count > 5 ? 2.4 : 3.2);
-                const archY = Math.abs(offset) * (count > 5 ? 2.8 : 3.5);
+                const rotateDeg = offset * (count > 5 ? 2.1 : 3.0);
+                const archY = Math.abs(offset) * (count > 5 ? 2.2 : 3.0);
 
                 return (
                   <motion.div
@@ -855,7 +896,7 @@ export function GameTable({
                     initial={{ opacity: 0, y: 36, scale: 0.85 }}
                     animate={{
                       opacity: 1,
-                      y: isMyPlayTurn ? archY - 4 : archY,
+                      y: isMyPlayTurn ? archY - 3 : archY,
                       rotate: rotateDeg,
                       scale: 1,
                     }}
@@ -877,51 +918,10 @@ export function GameTable({
               })}
             </AnimatePresence>
           </div>
-
-          {/* Floating Quick Emotes Button */}
-          {mySeat !== null ? (
-            <div className="absolute right-0.5 sm:right-2 bottom-1.5 z-30">
-              <AnimatePresence>
-                {emoteOpen ? (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10, scale: 0.92 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 10, scale: 0.92 }}
-                    className="absolute bottom-11 right-0 w-48 sm:w-52 rounded-2xl border border-white/15 bg-[#0c1412]/95 p-1.5 shadow-2xl grid grid-cols-1 gap-1"
-                  >
-                    {EMOTE_KEYS.map((key) => (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => handleEmote(key)}
-                        className="flex items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs font-semibold text-white/90 hover:bg-amber-400/20 hover:text-amber-200 transition"
-                      >
-                        <span>{dict.emotes[key].emoji}</span>
-                        <span>{dict.emotes[key].label}</span>
-                      </button>
-                    ))}
-                  </motion.div>
-                ) : null}
-              </AnimatePresence>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setEmoteOpen((v) => !v);
-                  soundEngine.playClick();
-                }}
-                className="rounded-full border border-amber-400/40 bg-black/60 hover:bg-amber-400/20 p-2 sm:p-2.5 text-amber-300 shadow-lg backdrop-blur-md transition"
-                aria-label="Emotes"
-                title="Emotes"
-              >
-                <MessageSquareHeart className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
-            </div>
-          ) : null}
         </div>
       </div>
 
-      {/* Hand Summary & Match Victory Overlay */}
+      {/* Hand Summary & Match Victory Overlay — z-50 above TopBar, scrollable body + always-visible sticky CTA footer! */}
       <AnimatePresence>
         {(game.phase === "HAND_SUMMARY" || game.phase === "GAME_OVER") &&
         game.lastHandResult ? (
@@ -929,231 +929,237 @@ export function GameTable({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-40 flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4"
           >
             <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 16 }}
+              initial={{ opacity: 0, scale: 0.92, y: 14 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              className="w-full max-w-md max-h-[90dvh] overflow-y-auto rounded-3xl border border-amber-400/35 bg-[#0a1411]/95 p-5 sm:p-6 text-center text-white shadow-2xl space-y-4"
+              exit={{ opacity: 0, scale: 0.92 }}
+              className="w-full max-w-md max-h-[90dvh] flex flex-col rounded-3xl border border-amber-400/35 bg-[#0a1411]/98 text-center text-white shadow-2xl overflow-hidden"
             >
-              {/* Header Icon */}
-              <div
-                className={`mx-auto w-14 h-14 rounded-2xl border flex items-center justify-center ${
-                  game.lastHandResult.outcomeType === "REVOKE"
-                    ? "bg-rose-500/20 border-rose-400/60 text-rose-300"
-                    : "bg-amber-400/15 border-amber-400/45 text-amber-300"
-                }`}
-              >
-                {game.phase === "GAME_OVER" ? (
-                  <Trophy className="w-8 h-8" />
-                ) : game.lastHandResult.outcomeType === "REVOKE" ? (
-                  <ShieldAlert className="w-8 h-8" />
-                ) : game.lastHandResult.outcomeType === "KAPOTHI" ? (
-                  <Crown className="w-8 h-8" />
-                ) : (
-                  <Sparkles className="w-7 h-7" />
-                )}
-              </div>
+              {/* Scrollable Content Body */}
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-5 space-y-3">
+                {/* Header Icon */}
+                <div
+                  className={`mx-auto w-11 h-11 sm:w-12 sm:h-12 rounded-2xl border flex items-center justify-center ${
+                    game.lastHandResult.outcomeType === "REVOKE"
+                      ? "bg-rose-500/20 border-rose-400/60 text-rose-300"
+                      : "bg-amber-400/15 border-amber-400/45 text-amber-300"
+                  }`}
+                >
+                  {game.phase === "GAME_OVER" ? (
+                    <Trophy className="w-6 h-6 sm:w-7 sm:h-7" />
+                  ) : game.lastHandResult.outcomeType === "REVOKE" ? (
+                    <ShieldAlert className="w-6 h-6 sm:w-7 sm:h-7" />
+                  ) : game.lastHandResult.outcomeType === "KAPOTHI" ? (
+                    <Crown className="w-6 h-6 sm:w-7 sm:h-7" />
+                  ) : (
+                    <Sparkles className="w-6 h-6" />
+                  )}
+                </div>
 
-              {/* Outcome Headline */}
-              <div>
-                <p className="text-xs font-bold uppercase tracking-widest text-amber-300/80">
-                  {game.phase === "GAME_OVER"
-                    ? dict.matchComplete
-                    : `${dict.hand} #${game.lastHandResult.handNumber} • ${dict.handComplete}`}
-                </p>
+                {/* Outcome Headline */}
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-amber-300/80">
+                    {game.phase === "GAME_OVER"
+                      ? dict.matchComplete
+                      : `${dict.hand} #${game.lastHandResult.handNumber} • ${dict.handComplete}`}
+                  </p>
 
-                {game.phase === "GAME_OVER" && game.matchWinner ? (
-                  <h2 className="mt-1 text-2xl sm:text-3xl font-black text-amber-200">
-                    {dict.winsMatch(
-                      game.matchWinner === "A" ? dict.teamA : dict.teamB
-                    )}
-                  </h2>
-                ) : game.lastHandResult.outcomeType === "REVOKE" ? (
-                  <h2 className="mt-1 text-xl sm:text-2xl font-black text-rose-300">
-                    {dict.revokeTitle}
-                  </h2>
-                ) : game.lastHandResult.outcomeType === "SEPORU" ? (
-                  <>
-                    <h2 className="mt-1 text-2xl font-black text-amber-200">
-                      ⚖️ {dict.seporuTitle}
-                    </h2>
-                    <p className="mt-1.5 text-xs sm:text-sm text-white/75">
-                      {dict.seporuDesc}
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    {game.lastHandResult.outcomeType === "KAPOTHI" ? (
-                      <div className="mt-1 inline-block rounded-full bg-gradient-to-r from-amber-400 to-rose-400 px-3 py-0.5 text-xs font-black uppercase tracking-wider text-slate-950">
-                        🔥 {dict.sweepName(room.settings.kapothiLabel)}! (8–0)
-                      </div>
-                    ) : null}
-                    <h2 className="mt-1 text-2xl font-black text-white">
-                      {dict.winsHand(
-                        game.lastHandResult.winnerTeam === "A"
-                          ? dict.teamA
-                          : dict.teamB
+                  {game.phase === "GAME_OVER" && game.matchWinner ? (
+                    <h2 className="mt-0.5 text-xl sm:text-2xl font-black text-amber-200">
+                      {dict.winsMatch(
+                        game.matchWinner === "A" ? dict.teamA : dict.teamB
                       )}
                     </h2>
-                  </>
-                )}
-              </div>
+                  ) : game.lastHandResult.outcomeType === "REVOKE" ? (
+                    <h2 className="mt-0.5 text-lg sm:text-xl font-black text-rose-300">
+                      {dict.revokeTitle}
+                    </h2>
+                  ) : game.lastHandResult.outcomeType === "SEPORU" ? (
+                    <>
+                      <h2 className="mt-0.5 text-xl font-black text-amber-200">
+                        ⚖️ {dict.seporuTitle}
+                      </h2>
+                      <p className="mt-1 text-xs text-white/75">
+                        {dict.seporuDesc}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      {game.lastHandResult.outcomeType === "KAPOTHI" ? (
+                        <div className="mt-1 inline-block rounded-full bg-gradient-to-r from-amber-400 to-rose-400 px-3 py-0.5 text-xs font-black uppercase tracking-wider text-slate-950">
+                          🔥 {dict.sweepName(room.settings.kapothiLabel)}! (8–0)
+                        </div>
+                      ) : null}
+                      <h2 className="mt-0.5 text-xl font-black text-white">
+                        {dict.winsHand(
+                          game.lastHandResult.winnerTeam === "A"
+                            ? dict.teamA
+                            : dict.teamB
+                        )}
+                      </h2>
+                    </>
+                  )}
+                </div>
 
-              {/* Revoke Visual Proof Box */}
-              {revokeInfo ? (
-                <div className="rounded-2xl border border-rose-400/40 bg-rose-500/10 p-3.5 sm:p-4 space-y-3">
-                  <p className="text-xs sm:text-sm font-semibold text-rose-100">
-                    {dict.revokeSubtitle(
-                      offendingPlayerName,
-                      `${SUIT_SYMBOL[revokeInfo.ledSuit]} ${dict.suits[revokeInfo.ledSuit]}`
-                    )}
-                  </p>
+                {/* Revoke Visual Proof Box */}
+                {revokeInfo ? (
+                  <div className="rounded-2xl border border-rose-400/40 bg-rose-500/10 p-3 space-y-2">
+                    <p className="text-xs font-semibold text-rose-100">
+                      {dict.revokeSubtitle(
+                        offendingPlayerName,
+                        `${SUIT_SYMBOL[revokeInfo.ledSuit]} ${dict.suits[revokeInfo.ledSuit]}`
+                      )}
+                    </p>
 
-                  <div className="flex items-center justify-center gap-6">
-                    <div className="flex flex-col items-center gap-1">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-rose-300">
-                        {dict.revokePlayedLabel}
-                      </span>
-                      <PlayingCard
-                        card={revokeInfo.playedCard}
-                        size="sm"
-                        isTrump={
-                          revokeInfo.playedCard.suit ===
-                          game.lastHandResult.trumpSuit
-                        }
-                        isCut
-                      />
+                    <div className="flex items-center justify-center gap-6">
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-rose-300">
+                          {dict.revokePlayedLabel}
+                        </span>
+                        <PlayingCard
+                          card={revokeInfo.playedCard}
+                          size="sm"
+                          isTrump={
+                            revokeInfo.playedCard.suit ===
+                            game.lastHandResult.trumpSuit
+                          }
+                          isCut
+                        />
+                      </div>
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300">
+                          {dict.revokeHadInHandLabel}
+                        </span>
+                        <PlayingCard
+                          card={revokeInfo.heldMatchingCard}
+                          size="sm"
+                          isWinning
+                        />
+                      </div>
                     </div>
-                    <div className="flex flex-col items-center gap-1">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300">
-                        {dict.revokeHadInHandLabel}
-                      </span>
-                      <PlayingCard
-                        card={revokeInfo.heldMatchingCard}
-                        size="sm"
-                        isWinning
-                      />
-                    </div>
+
+                    <p className="text-xs font-extrabold text-amber-200">
+                      {dict.revokePenaltyNote(
+                        revokeInfo.winningTeam === "A" ? dict.teamA : dict.teamB
+                      )}
+                    </p>
                   </div>
+                ) : null}
 
-                  <p className="text-xs font-extrabold text-amber-200">
-                    {dict.revokePenaltyNote(
-                      revokeInfo.winningTeam === "A" ? dict.teamA : dict.teamB
-                    )}
-                  </p>
-                </div>
-              ) : null}
-
-              {/* Trick & Token Breakdown */}
-              <div className="rounded-2xl bg-white/[0.04] border border-white/10 p-3.5 sm:p-4 space-y-2 text-xs sm:text-sm">
-                <div className="flex justify-between text-white/75">
-                  <span>{dict.tricks}</span>
-                  <span className="font-bold text-white tabular-nums">
-                    {dict.teamA} {game.lastHandResult.tricksWon.A} –{" "}
-                    {game.lastHandResult.tricksWon.B} {dict.teamB}
-                  </span>
-                </div>
-                <div className="flex justify-between text-white/75">
-                  <span>{dict.trump}</span>
-                  <span className="font-bold text-amber-200">
-                    {SUIT_SYMBOL[game.lastHandResult.trumpSuit]}{" "}
-                    {dict.suits[game.lastHandResult.trumpSuit]} (
-                    {game.lastHandResult.trumpTeam === "A"
-                      ? dict.teamA
-                      : dict.teamB}
-                    )
-                  </span>
-                </div>
-                {game.lastHandResult.totalTokensAwarded > 0 ? (
-                  <>
-                    <div className="flex justify-between text-white/75">
-                      <span>{dict.baseTokensLabel}</span>
-                      <span className="font-bold text-emerald-300">
-                        +{game.lastHandResult.baseTokens}
-                      </span>
-                    </div>
-                    {game.lastHandResult.bonusTokensApplied > 0 ? (
+                {/* Trick & Token Breakdown */}
+                <div className="rounded-2xl bg-white/[0.04] border border-white/10 p-3 space-y-1.5 text-xs sm:text-sm">
+                  <div className="flex justify-between text-white/75">
+                    <span>{dict.tricks}</span>
+                    <span className="font-bold text-white tabular-nums">
+                      {dict.teamA} {game.lastHandResult.tricksWon.A} –{" "}
+                      {game.lastHandResult.tricksWon.B} {dict.teamB}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-white/75">
+                    <span>{dict.trump}</span>
+                    <span className="font-bold text-amber-200">
+                      {SUIT_SYMBOL[game.lastHandResult.trumpSuit]}{" "}
+                      {dict.suits[game.lastHandResult.trumpSuit]} (
+                      {game.lastHandResult.trumpTeam === "A"
+                        ? dict.teamA
+                        : dict.teamB}
+                      )
+                    </span>
+                  </div>
+                  {game.lastHandResult.totalTokensAwarded > 0 ? (
+                    <>
                       <div className="flex justify-between text-white/75">
-                        <span>{dict.bonusTokensLabel}</span>
-                        <span className="font-bold text-amber-300">
-                          +{game.lastHandResult.bonusTokensApplied}
+                        <span>{dict.baseTokensLabel}</span>
+                        <span className="font-bold text-emerald-300">
+                          +{game.lastHandResult.baseTokens}
                         </span>
                       </div>
-                    ) : null}
-                    <div className="pt-2 border-t border-white/10 flex justify-between font-black text-amber-200">
-                      <span>{dict.tokens}</span>
-                      <span>
-                        {dict.tokensAwarded(
-                          game.lastHandResult.totalTokensAwarded
-                        )}
-                      </span>
-                    </div>
-                  </>
-                ) : null}
+                      {game.lastHandResult.bonusTokensApplied > 0 ? (
+                        <div className="flex justify-between text-white/75">
+                          <span>{dict.bonusTokensLabel}</span>
+                          <span className="font-bold text-amber-300">
+                            +{game.lastHandResult.bonusTokensApplied}
+                          </span>
+                        </div>
+                      ) : null}
+                      <div className="pt-1.5 border-t border-white/10 flex justify-between font-black text-amber-200">
+                        <span>{dict.tokens}</span>
+                        <span>
+                          {dict.tokensAwarded(
+                            game.lastHandResult.totalTokensAwarded
+                          )}
+                        </span>
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+
+                {/* Updated Keta Stack */}
+                <KetaTokens
+                  scores={game.scores}
+                  carryOverBonus={game.carryOverBonus}
+                  myTeam={myTeam}
+                  compact
+                />
               </div>
 
-              {/* Updated Keta Stack */}
-              <KetaTokens
-                scores={game.scores}
-                carryOverBonus={game.carryOverBonus}
-                myTeam={myTeam}
-              />
-
-              {/* Action Buttons */}
-              {isHost ? (
-                game.phase === "GAME_OVER" ? (
-                  <div className="space-y-2 pt-1">
-                    <div className="grid grid-cols-2 gap-2">
+              {/* Sticky Footer Action Buttons — ALWAYS reachable without scrolling! */}
+              <div className="shrink-0 border-t border-white/10 bg-[#08100d] p-3.5 sm:p-4">
+                {isHost ? (
+                  game.phase === "GAME_OVER" ? (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            soundEngine.playClick();
+                            returnRoomToLobby(room.code);
+                          }}
+                          className="rounded-xl border border-white/15 bg-white/[0.07] hover:bg-white/15 py-2.5 text-xs sm:text-sm font-bold text-white transition"
+                        >
+                          {dict.backToLobby}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            soundEngine.playCardDeal();
+                            startMatch(room.code);
+                          }}
+                          className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 py-2.5 text-xs sm:text-sm font-black text-slate-950 transition"
+                        >
+                          <RotateCcw className="w-4 h-4" />
+                          {dict.playAgain}
+                        </button>
+                      </div>
                       <button
                         type="button"
-                        onClick={() => {
-                          soundEngine.playClick();
-                          returnRoomToLobby(room.code);
-                        }}
-                        className="rounded-xl border border-white/15 bg-white/[0.07] hover:bg-white/15 py-2.5 text-xs sm:text-sm font-bold text-white transition"
+                        onClick={handleCloseFinishedRoom}
+                        className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl border border-rose-400/35 bg-rose-500/15 hover:bg-rose-500/25 py-2 text-xs font-bold text-rose-200 transition"
                       >
-                        {dict.backToLobby}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          soundEngine.playCardDeal();
-                          startMatch(room.code);
-                        }}
-                        className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 py-2.5 text-xs sm:text-sm font-black text-slate-950 transition"
-                      >
-                        <RotateCcw className="w-4 h-4" />
-                        {dict.playAgain}
+                        <Trash2 className="w-3.5 h-3.5" />
+                        {dict.closeRoom}
                       </button>
                     </div>
+                  ) : (
                     <button
                       type="button"
-                      onClick={handleCloseFinishedRoom}
-                      className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl border border-rose-400/35 bg-rose-500/15 hover:bg-rose-500/25 py-2.5 text-xs font-bold text-rose-200 transition"
+                      onClick={() => {
+                        soundEngine.playCardDeal();
+                        dealNextHand(room.code);
+                      }}
+                      className="w-full rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 hover:brightness-110 py-3 text-sm sm:text-base font-black text-slate-950 shadow-xl shadow-amber-500/20 transition"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      {dict.closeRoom}
+                      {dict.nextHand}
                     </button>
-                  </div>
+                  )
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      soundEngine.playCardDeal();
-                      dealNextHand(room.code);
-                    }}
-                    className="w-full rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 hover:brightness-110 py-3.5 text-sm sm:text-base font-black text-slate-950 shadow-xl shadow-amber-500/20 transition"
-                  >
-                    {dict.nextHand}
-                  </button>
-                )
-              ) : (
-                <p className="text-xs text-amber-200/80 animate-pulse pt-1">
-                  {dict.waitingForHost}
-                </p>
-              )}
+                  <p className="text-xs text-amber-200/80 animate-pulse py-1">
+                    {dict.waitingForHost}
+                  </p>
+                )}
+              </div>
             </motion.div>
           </motion.div>
         ) : null}

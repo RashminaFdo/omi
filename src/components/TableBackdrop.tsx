@@ -3,7 +3,13 @@
 import React from "react";
 import { useSettings } from "@/lib/settings";
 
-export function TableBackdrop({ children }: { children: React.ReactNode }) {
+export function TableBackdrop({
+  children,
+  lockViewport = false,
+}: {
+  children: React.ReactNode;
+  lockViewport?: boolean;
+}) {
   const { prefs } = useSettings();
 
   const themeClass =
@@ -15,7 +21,9 @@ export function TableBackdrop({ children }: { children: React.ReactNode }) {
 
   return (
     <div
-      className={`relative min-h-dvh flex flex-col text-white overflow-x-hidden ${themeClass}`}
+      className={`relative flex flex-col text-white overflow-x-hidden ${
+        lockViewport ? "h-dvh overflow-hidden" : "min-h-dvh"
+      } ${themeClass}`}
     >
       {/* Subtle woven casino felt dot texture */}
       <div className="pointer-events-none fixed inset-0 felt-texture opacity-45" />

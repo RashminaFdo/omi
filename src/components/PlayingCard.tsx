@@ -19,10 +19,10 @@ interface PlayingCardProps {
 }
 
 const SIZE_CLASSES: Record<NonNullable<PlayingCardProps["size"]>, string> = {
-  xs: "w-10 h-14 sm:w-11 sm:h-16 rounded-md",
-  sm: "w-12 h-[70px] sm:w-16 sm:h-24 rounded-lg",
-  md: "w-[62px] h-[90px] sm:w-[82px] sm:h-[118px] rounded-xl",
-  lg: "w-[64px] h-[94px] sm:w-[88px] sm:h-[126px] rounded-xl",
+  xs: "w-9 h-[52px] sm:w-11 sm:h-16 rounded-md",
+  sm: "w-11 h-[64px] sm:w-16 sm:h-24 rounded-lg",
+  md: "w-[56px] h-[82px] sm:w-[80px] sm:h-[116px] rounded-xl",
+  lg: "w-[56px] h-[82px] sm:w-[86px] sm:h-[124px] rounded-xl",
 };
 
 function SuitIcon({

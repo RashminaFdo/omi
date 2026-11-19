@@ -39,15 +39,16 @@ export const WonTricksPile = React.memo(function WonTricksPile({
     }
   };
 
-  // Smart positioning for the revealed won-cards popover on both mobile & desktop
+  // On mobile (<sm), center the peek card sheet cleanly in viewport so it NEVER clips off-screen;
+  // on desktop (sm+), anchor it smartly next to that player's won pile!
   const popoverPosition =
     placement === "bottom"
-      ? "bottom-full mb-2 left-1/2 -translate-x-1/2"
+      ? "fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 sm:absolute sm:top-auto sm:translate-y-0 sm:bottom-full sm:mb-2 sm:left-1/2 sm:-translate-x-1/2"
       : placement === "top"
-      ? "top-full mt-2 left-1/2 -translate-x-1/2"
+      ? "fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 sm:absolute sm:bottom-auto sm:translate-y-0 sm:top-full sm:mt-2 sm:left-1/2 sm:-translate-x-1/2"
       : placement === "left"
-      ? "left-full ml-2 top-1/2 -translate-y-1/2"
-      : "right-full mr-2 top-1/2 -translate-y-1/2";
+      ? "fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 sm:absolute sm:left-full sm:ml-2 sm:top-1/2 sm:-translate-y-1/2 sm:translate-x-0"
+      : "fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 sm:absolute sm:left-auto sm:right-full sm:mr-2 sm:top-1/2 sm:-translate-y-1/2 sm:translate-x-0";
 
   const visibleStacks = Math.min(tricks.length, 4);
 

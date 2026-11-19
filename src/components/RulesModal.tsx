@@ -26,14 +26,14 @@ export function RulesModal() {
             exit={{ opacity: 0, scale: 0.94, y: 12 }}
             transition={{ duration: 0.2 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-2xl max-h-[88vh] overflow-y-auto rounded-3xl border border-white/15 bg-[#0c1412]/95 p-6 text-white shadow-2xl"
+            className="w-full max-w-2xl max-h-[86dvh] flex flex-col rounded-3xl border border-white/15 bg-[#0c1412]/98 text-white shadow-2xl overflow-hidden"
           >
-            <div className="flex items-center justify-between gap-3 mb-5">
+            <div className="shrink-0 flex items-center justify-between gap-3 px-5 pt-5 pb-3 border-b border-white/10">
               <div className="flex items-center gap-2.5">
                 <span className="p-2 rounded-xl bg-amber-400/15 border border-amber-400/35 text-amber-300">
                   <BookOpen className="w-5 h-5" />
                 </span>
-                <h2 className="text-lg sm:text-xl font-bold text-amber-200">
+                <h2 className="text-base sm:text-xl font-bold text-amber-200">
                   {dict.rulesTitle}
                 </h2>
               </div>
@@ -56,6 +56,8 @@ export function RulesModal() {
                 </button>
               </div>
             </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5">
 
             {/* Quick Suits & Face Cards Reference */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-5">
@@ -113,13 +115,17 @@ export function RulesModal() {
               ))}
             </div>
 
-            <button
-              type="button"
-              onClick={() => setRulesOpen(false)}
-              className="mt-6 w-full rounded-xl bg-amber-400 py-2.5 text-sm font-bold text-slate-950 hover:bg-amber-300 transition"
-            >
-              {dict.close}
-            </button>
+            </div>
+
+            <div className="shrink-0 border-t border-white/10 bg-[#08100d] p-4">
+              <button
+                type="button"
+                onClick={() => setRulesOpen(false)}
+                className="w-full rounded-xl bg-amber-400 py-2.5 text-sm font-bold text-slate-950 hover:bg-amber-300 transition"
+              >
+                {dict.close}
+              </button>
+            </div>
           </motion.div>
         </motion.div>
       ) : null}

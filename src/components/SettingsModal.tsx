@@ -62,10 +62,10 @@ export function SettingsModal() {
             exit={{ opacity: 0, scale: 0.94, y: 12 }}
             transition={{ duration: 0.2 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md max-h-[88vh] overflow-y-auto rounded-3xl border border-white/15 bg-[#0c1412]/95 p-6 text-white shadow-2xl"
+            className="w-full max-w-md max-h-[86dvh] flex flex-col rounded-3xl border border-white/15 bg-[#0c1412]/98 text-white shadow-2xl overflow-hidden"
           >
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold tracking-tight text-amber-200">
+            <div className="shrink-0 flex items-center justify-between px-5 pt-5 pb-3 border-b border-white/10">
+              <h2 className="text-lg sm:text-xl font-bold tracking-tight text-amber-200">
                 {dict.settingsTitle}
               </h2>
               <button
@@ -78,7 +78,7 @@ export function SettingsModal() {
               </button>
             </div>
 
-            <div className="space-y-6">
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 space-y-5">
               {/* Language Toggle */}
               <div>
                 <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-white/65 mb-2.5">
@@ -250,13 +250,15 @@ export function SettingsModal() {
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setSettingsOpen(false)}
-              className="mt-7 w-full rounded-xl bg-amber-400 py-2.5 text-sm font-bold text-slate-950 hover:bg-amber-300 transition"
-            >
-              {dict.close}
-            </button>
+            <div className="shrink-0 border-t border-white/10 bg-[#08100d] p-4">
+              <button
+                type="button"
+                onClick={() => setSettingsOpen(false)}
+                className="w-full rounded-xl bg-amber-400 py-2.5 text-sm font-bold text-slate-950 hover:bg-amber-300 transition"
+              >
+                {dict.close}
+              </button>
+            </div>
           </motion.div>
         </motion.div>
       ) : null}
