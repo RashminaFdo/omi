@@ -11,12 +11,14 @@ import {
   Play,
   Share2,
   Timer,
+  Trash2,
   UserPlus,
   Users,
   X,
 } from "lucide-react";
 import {
   addBotToSeat,
+  deleteRoom,
   fillEmptySeatsWithBots,
   removeBotFromSeat,
   startMatch,
@@ -35,11 +37,20 @@ import type {
 interface LobbyViewProps {
   room: RoomData;
   uid: string;
+  deviceId: string;
   mySeat: SeatIndex | null;
   nickname: string;
+  onRoomClosed: () => void;
 }
 
-export function LobbyView({ room, uid, mySeat, nickname }: LobbyViewProps) {
+export function LobbyView({
+  room,
+  uid,
+  deviceId,
+  mySeat,
+  nickname,
+  onRoomClosed,
+}: LobbyViewProps) {
   const { prefs, dict } = useSettings();
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
@@ -94,10 +105,17 @@ export function LobbyView({ room, uid, mySeat, nickname }: LobbyViewProps) {
     setBusySeat(seat);
     try {
       soundEngine.playClick();
-      await switchSeat(room.code, uid, nickname, seat);
+      await switchSeat(room.code, uid, nickname, seat, deviceId);
     } finally {
       setBusySeat(null);
     }
+  };
+
+  const handleDisband = async () => {
+    if (!isHost) return;
+    soundEngine.playClick();
+    await deleteRoom(room.code).catch(() => {});
+    onRoomClosed();
   };
 
   const handleAddBot = async (e: React.MouseEvent, seat: SeatIndex) => {
@@ -465,6 +483,15 @@ export function LobbyView({ room, uid, mySeat, nickname }: LobbyViewProps) {
                       {dict.waitingForPlayers}
                     </p>
                   ) : null}
+
+                  <button
+                    type="button"
+                    onClick={handleDisband}
+                    className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl border border-rose-400/30 bg-rose-500/10 hover:bg-rose-500/20 py-2 px-3 text-xs font-semibold text-rose-200 transition"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    {dict.disbandRoom}
+                  </button>
                 </div>
               ) : (
                 <div className="pt-3 border-t border-white/10 text-center">

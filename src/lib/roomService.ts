@@ -3,7 +3,9 @@ import {
   onDisconnect,
   onValue,
   ref,
+  remove,
   runTransaction,
+  serverTimestamp,
   set,
   update,
 } from "firebase/database";
@@ -33,6 +35,30 @@ import type {
 
 const ROOM_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // excludes 0, O, 1, I
 const BOT_NAMES = ["Kasun", "Nimali", "Ruwan", "Tharushi", "Dilshan", "Chathuri"];
+const DEVICE_ID_KEY = "omi_device_id_v1";
+
+export const OFFLINE_TAKEOVER_MS = 15_000; // 15 seconds before AI bot subs in
+export const FINISHED_ROOM_TTL_MS = 180_000; // 3 minutes auto-cleanup after match ends
+
+/**
+ * Returns a persistent unique Machine / Device ID stored in localStorage.
+ * Ensures only the original player's device can reclaim a disconnected/bot-subbed seat.
+ */
+export function getOrCreateDeviceId(): string {
+  if (typeof window === "undefined") return "ssr";
+  try {
+    const existing = window.localStorage.getItem(DEVICE_ID_KEY);
+    if (existing && existing.length >= 12) return existing;
+    const generated =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `dev_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
+    window.localStorage.setItem(DEVICE_ID_KEY, generated);
+    return generated;
+  } catch {
+    return `dev_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  }
+}
 
 export function generateRoomCode(): string {
   let code = "";
@@ -55,6 +81,18 @@ function normalizeCards(val: unknown): Card[] {
   return [];
 }
 
+function normalizeWonTricks(val: unknown): Card[][] {
+  if (!val) return [];
+  const list = Array.isArray(val)
+    ? val
+    : typeof val === "object"
+    ? Object.values(val as Record<string, unknown>)
+    : [];
+  return list
+    .map((trick) => normalizeCards(trick))
+    .filter((cards) => cards.length > 0);
+}
+
 function normalizeTrick(val: unknown): TrickPlay[] {
   if (!val) return [];
   if (Array.isArray(val)) return val.filter(Boolean) as TrickPlay[];
@@ -64,10 +102,16 @@ function normalizeTrick(val: unknown): TrickPlay[] {
   return [];
 }
 
-export function normalizeGameState(raw: GameState | null | undefined): GameState | null {
+export function normalizeGameState(
+  raw: GameState | null | undefined
+): GameState | null {
   if (!raw) return null;
   const handsObj = (raw.hands ?? {}) as Record<string, unknown>;
-  const pendingObj = raw.pendingSecondDeal as Record<string, unknown> | null | undefined;
+  const pendingObj = raw.pendingSecondDeal as
+    | Record<string, unknown>
+    | null
+    | undefined;
+  const wonObj = (raw.wonTricksBySeat ?? {}) as Record<string, unknown>;
 
   return {
     phase: raw.phase,
@@ -80,7 +124,7 @@ export function normalizeGameState(raw: GameState | null | undefined): GameState
     currentTurn: (raw.currentTurn ?? 0) as SeatIndex,
     turnStartedAt: raw.turnStartedAt ?? Date.now(),
     trickNumber: raw.trickNumber ?? 1,
-    trickLeader: (raw.trickLeader ?? 1) as SeatIndex,
+    trickLeader: (raw.trickLeader ?? 0) as SeatIndex,
     currentTrick: normalizeTrick(raw.currentTrick),
     lastTrickWinner:
       raw.lastTrickWinner === undefined ? null : raw.lastTrickWinner,
@@ -100,6 +144,12 @@ export function normalizeGameState(raw: GameState | null | undefined): GameState
           "3": normalizeCards(pendingObj["3"]),
         }
       : null,
+    wonTricksBySeat: {
+      "0": normalizeWonTricks(wonObj["0"]),
+      "1": normalizeWonTricks(wonObj["1"]),
+      "2": normalizeWonTricks(wonObj["2"]),
+      "3": normalizeWonTricks(wonObj["3"]),
+    },
     tricksWon: {
       A: raw.tricksWon?.A ?? 0,
       B: raw.tricksWon?.B ?? 0,
@@ -115,15 +165,21 @@ export function normalizeGameState(raw: GameState | null | undefined): GameState
   };
 }
 
-export function normalizeRoomData(raw: RoomData | null | undefined): RoomData | null {
+export function normalizeRoomData(
+  raw: RoomData | null | undefined
+): RoomData | null {
   if (!raw || !raw.code) return null;
-  const seatsRaw = (raw.seats ?? {}) as Record<string, SeatPlayer | null | undefined>;
+  const seatsRaw = (raw.seats ?? {}) as Record<
+    string,
+    SeatPlayer | null | undefined
+  >;
   return {
     code: raw.code,
     hostUid: raw.hostUid,
     status: raw.status ?? "lobby",
     createdAt: raw.createdAt ?? Date.now(),
     updatedAt: raw.updatedAt ?? Date.now(),
+    finishedAt: raw.finishedAt ?? null,
     settings: {
       turnTimer: raw.settings?.turnTimer ?? 30,
       kapothiLabel: raw.settings?.kapothiLabel ?? "kapothi",
@@ -139,15 +195,21 @@ export function normalizeRoomData(raw: RoomData | null | undefined): RoomData | 
   };
 }
 
+/**
+ * Finds the seat belonging to this player by Firebase Auth UID OR persistent Machine/Device ID.
+ * Only the matching device/UID can reclaim a disconnected or bot-taken-over human seat.
+ */
 export function findPlayerSeat(
   room: RoomData | null,
-  uid: string | null
+  uid: string | null,
+  deviceId?: string | null
 ): SeatIndex | null {
-  if (!room || !uid) return null;
+  if (!room) return null;
   for (const s of [0, 1, 2, 3] as SeatIndex[]) {
-    if (room.seats[String(s)]?.uid === uid) {
-      return s;
-    }
+    const p = room.seats[String(s)];
+    if (!p || p.isBot) continue;
+    if (uid && p.uid === uid) return s;
+    if (deviceId && p.deviceId && p.deviceId === deviceId) return s;
   }
   return null;
 }
@@ -155,9 +217,9 @@ export function findPlayerSeat(
 export async function createRoom(playerName: string): Promise<string> {
   const user = await ensureAnonymousUser();
   const db = getFirebaseDb();
+  const deviceId = getOrCreateDeviceId();
   const cleanName = playerName.trim().slice(0, 20) || "Player";
 
-  // Try up to 5 codes to avoid collision
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = generateRoomCode();
     const roomRef = ref(db, `rooms/${code}`);
@@ -171,6 +233,7 @@ export async function createRoom(playerName: string): Promise<string> {
       status: "lobby",
       createdAt: now,
       updatedAt: now,
+      finishedAt: null,
       settings: {
         turnTimer: 30,
         kapothiLabel: "kapothi",
@@ -182,6 +245,9 @@ export async function createRoom(playerName: string): Promise<string> {
           isBot: false,
           online: true,
           joinedAt: now,
+          deviceId,
+          disconnectedAt: null,
+          botTakeover: false,
         },
         "1": null,
         "2": null,
@@ -219,13 +285,14 @@ export function subscribeToRoom(
 }
 
 /**
- * Automatically seats a joining player if they aren't already seated,
- * or updates their display name & online status if they already hold a seat.
+ * Seats a joining player in lobby, OR allows ONLY the original player (matched by UID or Machine/Device ID)
+ * to reclaim their seat mid-game — even if an AI bot temporarily took over after the 15s timeout!
  */
 export async function joinOrReconnectSeat(
   code: string,
   uid: string,
-  playerName: string
+  playerName: string,
+  deviceId: string
 ): Promise<{ seated: boolean; seat: SeatIndex | null }> {
   const db = getFirebaseDb();
   const cleanName = playerName.trim().slice(0, 20) || "Player";
@@ -235,29 +302,38 @@ export async function joinOrReconnectSeat(
     const room = normalizeRoomData(current as RoomData | null);
     if (!room) return current;
 
-    // Check if already seated
-    const existingSeat = findPlayerSeat(room, uid);
+    // 1. Reclaim existing seat if UID or Device/Machine ID matches
+    const existingSeat = findPlayerSeat(room, uid, deviceId);
     if (existingSeat !== null) {
       const seatKey = String(existingSeat);
       const seatObj = room.seats[seatKey];
       if (seatObj) {
+        const wasHost = room.hostUid === seatObj.uid;
         room.seats[seatKey] = {
           ...seatObj,
-          name: cleanName,
+          uid, // refresh UID in case anonymous session rotated on the same device
+          deviceId: seatObj.deviceId ?? deviceId,
+          name: cleanName || seatObj.name,
           online: true,
+          disconnectedAt: null,
+          botTakeover: false,
         };
+        if (wasHost) {
+          room.hostUid = uid;
+        }
       }
       assignedSeat = existingSeat;
       room.updatedAt = Date.now();
       return room;
     }
 
-    // Only auto-take an open seat while in lobby
+    // 2. Strangers cannot join a match already in progress or hijack a disconnected player's seat
     if (room.status !== "lobby") {
       assignedSeat = null;
       return room;
     }
 
+    // 3. Take next open seat in lobby
     for (const s of [0, 1, 2, 3] as SeatIndex[]) {
       if (!room.seats[String(s)]) {
         room.seats[String(s)] = {
@@ -266,6 +342,9 @@ export async function joinOrReconnectSeat(
           isBot: false,
           online: true,
           joinedAt: Date.now(),
+          deviceId,
+          disconnectedAt: null,
+          botTakeover: false,
         };
         assignedSeat = s;
         room.updatedAt = Date.now();
@@ -287,7 +366,8 @@ export async function switchSeat(
   code: string,
   uid: string,
   playerName: string,
-  targetSeat: SeatIndex
+  targetSeat: SeatIndex,
+  deviceId: string
 ): Promise<void> {
   const db = getFirebaseDb();
   const cleanName = playerName.trim().slice(0, 20) || "Player";
@@ -297,9 +377,9 @@ export async function switchSeat(
     if (!room || room.status !== "lobby") return current;
 
     const targetKey = String(targetSeat);
-    if (room.seats[targetKey]) return current; // already taken
+    if (room.seats[targetKey]) return current;
 
-    const currentSeat = findPlayerSeat(room, uid);
+    const currentSeat = findPlayerSeat(room, uid, deviceId);
     if (currentSeat !== null) {
       room.seats[String(currentSeat)] = null;
     }
@@ -310,59 +390,141 @@ export async function switchSeat(
       isBot: false,
       online: true,
       joinedAt: Date.now(),
+      deviceId,
+      disconnectedAt: null,
+      botTakeover: false,
     };
     room.updatedAt = Date.now();
     return room;
   });
 }
 
-export async function leaveLobbySeat(code: string, uid: string): Promise<void> {
+/**
+ * Deletes a room completely from Firebase Realtime Database to prevent database bloat.
+ */
+export async function deleteRoom(code: string): Promise<void> {
   const db = getFirebaseDb();
+  await remove(ref(db, `rooms/${code}`));
+}
+
+/**
+ * Leaves a room. If no human players remain in a lobby or finished match,
+ * automatically deletes the room from Firebase Realtime Database!
+ */
+export async function leaveLobbySeat(
+  code: string,
+  uid: string,
+  deviceId?: string | null
+): Promise<void> {
+  const db = getFirebaseDb();
+  let shouldDelete = false;
+
   await runTransaction(ref(db, `rooms/${code}`), (current) => {
     const room = normalizeRoomData(current as RoomData | null);
     if (!room) return current;
 
-    const seat = findPlayerSeat(room, uid);
-    if (seat === null) return current;
-
-    if (room.status === "lobby") {
-      room.seats[String(seat)] = null;
-      // Transfer host if leaving player was host
-      if (room.hostUid === uid) {
-        const nextHuman = ([0, 1, 2, 3] as SeatIndex[])
-          .map((s) => room.seats[String(s)])
-          .find((p) => p && !p.isBot);
-        if (nextHuman) {
-          room.hostUid = nextHuman.uid;
+    const seat = findPlayerSeat(room, uid, deviceId);
+    if (seat !== null) {
+      if (room.status === "lobby" || room.status === "finished") {
+        room.seats[String(seat)] = null;
+        if (room.hostUid === uid) {
+          const nextHuman = ([0, 1, 2, 3] as SeatIndex[])
+            .map((s) => room.seats[String(s)])
+            .find((p) => p && !p.isBot);
+          if (nextHuman) {
+            room.hostUid = nextHuman.uid;
+          }
+        }
+      } else {
+        // Mid-game: mark offline with timestamp so 15s bot takeover starts & original player can return
+        const existing = room.seats[String(seat)];
+        if (existing) {
+          room.seats[String(seat)] = {
+            ...existing,
+            online: false,
+            disconnectedAt: Date.now(),
+          };
         }
       }
-    } else {
-      // Mid-game: mark offline instead of deleting seat so player can reconnect
-      const existing = room.seats[String(seat)];
-      if (existing) {
-        room.seats[String(seat)] = { ...existing, online: false };
-      }
     }
+
+    const remainingHumans = ([0, 1, 2, 3] as SeatIndex[])
+      .map((s) => room.seats[String(s)])
+      .filter((p) => p && !p.isBot);
+
+    const anyOnlineHuman = remainingHumans.some((p) => p?.online);
+
+    if (
+      (room.status === "lobby" || room.status === "finished") &&
+      remainingHumans.length === 0
+    ) {
+      shouldDelete = true;
+      return null; // Deletes room node atomically!
+    }
+
+    if (room.status === "finished" && !anyOnlineHuman) {
+      shouldDelete = true;
+      return null;
+    }
+
     room.updatedAt = Date.now();
     return room;
   });
+
+  if (shouldDelete) {
+    await deleteRoom(code).catch(() => {});
+  }
 }
 
+/**
+ * Firebase onDisconnect presence tracking with serverTimestamp() for accurate 15s offline countdowns.
+ */
 export function attachPresence(code: string, seat: SeatIndex): () => void {
   const db = getFirebaseDb();
   const connectedRef = ref(db, ".info/connected");
-  const onlineRef = ref(db, `rooms/${code}/seats/${seat}/online`);
+  const seatRef = ref(db, `rooms/${code}/seats/${seat}`);
 
   const unsub = onValue(connectedRef, (snap) => {
     if (snap.val() === true) {
-      onDisconnect(onlineRef).set(false).catch(() => {});
-      set(onlineRef, true).catch(() => {});
+      onDisconnect(seatRef)
+        .update({
+          online: false,
+          disconnectedAt: serverTimestamp(),
+        })
+        .catch(() => {});
+
+      update(seatRef, {
+        online: true,
+        disconnectedAt: null,
+        botTakeover: false,
+      }).catch(() => {});
     }
   });
 
   return () => {
     unsub();
   };
+}
+
+/**
+ * Called by orchestrator once an offline human seat exceeds the 15-second grace period.
+ * Activates AI bot takeover while keeping deviceId/uid intact for exclusive reclaim!
+ */
+export async function activateBotTakeover(
+  code: string,
+  seat: SeatIndex
+): Promise<void> {
+  const db = getFirebaseDb();
+  await runTransaction(ref(db, `rooms/${code}/seats/${seat}`), (current) => {
+    const player = current as SeatPlayer | null;
+    if (!player || player.isBot || player.online || player.botTakeover) {
+      return current;
+    }
+    return {
+      ...player,
+      botTakeover: true,
+    };
+  });
 }
 
 export async function addBotToSeat(
@@ -389,6 +551,9 @@ export async function addBotToSeat(
       isBot: true,
       online: true,
       joinedAt: Date.now(),
+      deviceId: null,
+      disconnectedAt: null,
+      botTakeover: false,
     };
     room.updatedAt = Date.now();
     return room;
@@ -434,6 +599,9 @@ export async function fillEmptySeatsWithBots(code: string): Promise<void> {
           isBot: true,
           online: true,
           joinedAt: Date.now(),
+          deviceId: null,
+          disconnectedAt: null,
+          botTakeover: false,
         };
       }
     }
@@ -460,10 +628,9 @@ export async function startMatch(code: string): Promise<void> {
     );
     if (!allFilled) return current;
 
-    // Seat 3 deals Hand 1 so Seat 0 (the first anti-clockwise player) selects Trump first,
-    // then Seat 1 -> Seat 2 -> Seat 3 anti-clockwise in subsequent hands!
     const initialDealer: SeatIndex = 3;
     room.status = "playing";
+    room.finishedAt = null;
     room.game = createHandState({
       handNumber: 1,
       dealerSeat: initialDealer,
@@ -550,6 +717,7 @@ export async function submitCardPlay(
       room.game = nextGame;
       if (nextGame.phase === "GAME_OVER") {
         room.status = "finished";
+        room.finishedAt = Date.now();
       }
       room.updatedAt = Date.now();
       return room;
@@ -577,6 +745,7 @@ export async function commitTrickAdvance(
     room.game = nextGame;
     if (nextGame.phase === "GAME_OVER") {
       room.status = "finished";
+      room.finishedAt = Date.now();
     }
     room.updatedAt = Date.now();
     return room;
@@ -598,6 +767,7 @@ export async function returnRoomToLobby(code: string): Promise<void> {
     const room = normalizeRoomData(current as RoomData | null);
     if (!room) return current;
     room.status = "lobby";
+    room.finishedAt = null;
     room.game = null;
     room.updatedAt = Date.now();
     return room;

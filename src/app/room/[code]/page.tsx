@@ -1,6 +1,6 @@
 "use client";
 
-import React, { use, useEffect, useRef, useState } from "react";
+import React, { use, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { AlertCircle, ArrowLeft, Loader2 } from "lucide-react";
@@ -15,13 +15,18 @@ import {
   chooseBotTrumpSuit,
 } from "@/lib/omiEngine";
 import {
+  activateBotTakeover,
   attachPresence,
   commitBlindTrumpDeal,
   commitTrickAdvance,
+  deleteRoom,
   findPlayerSeat,
+  FINISHED_ROOM_TTL_MS,
+  getOrCreateDeviceId,
   joinOrReconnectSeat,
   leaveLobbySeat,
   normalizeCode,
+  OFFLINE_TAKEOVER_MS,
   submitBlindTrumpCard,
   submitCardPlay,
   submitTrumpChoice,
@@ -41,12 +46,13 @@ export default function RoomPage({
   const router = useRouter();
   const { prefs, dict, hydrated, setNickname } = useSettings();
 
+  const deviceId = useMemo(() => getOrCreateDeviceId(), []);
+
   const [uid, setUid] = useState<string | null>(null);
   const [room, setRoom] = useState<RoomData | null>(null);
   const [roomLoaded, setRoomLoaded] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  // Direct-invite nickname prompt
   const [tempName, setTempName] = useState("");
   const [joiningSeat, setJoiningSeat] = useState(false);
   const hasAttemptedAutoJoin = useRef(false);
@@ -80,8 +86,10 @@ export default function RoomPage({
     };
   }, [code]);
 
-  const mySeat = findPlayerSeat(room, uid);
+  // Match player's seat by Firebase UID OR persistent Machine/Device ID
+  const mySeat = findPlayerSeat(room, uid, deviceId);
   const isHost = Boolean(room && uid && room.hostUid === uid);
+
   const needsName = Boolean(
     hydrated &&
       roomLoaded &&
@@ -92,31 +100,82 @@ export default function RoomPage({
       !prefs.nickname.trim()
   );
 
-  // 2. Auto-join seat if user already has a saved nickname
+  // 2. Auto-join seat in lobby OR reclaim disconnected/bot-subbed seat by Machine/Device ID!
+  const mySeatPlayer = mySeat !== null ? room?.seats[String(mySeat)] : null;
+  const needsReclaim = Boolean(
+    mySeatPlayer &&
+      (!mySeatPlayer.online ||
+        mySeatPlayer.botTakeover ||
+        mySeatPlayer.uid !== uid)
+  );
+
   useEffect(() => {
-    if (!hydrated || !roomLoaded || !room || !uid || mySeat !== null) return;
-    if (hasAttemptedAutoJoin.current) return;
+    if (!hydrated || !roomLoaded || !room || !uid) return;
+
+    // Reclaim own seat immediately if returning after disconnect or bot takeover
+    if (mySeat !== null && needsReclaim) {
+      joinOrReconnectSeat(
+        code,
+        uid,
+        prefs.nickname || mySeatPlayer?.name || "Player",
+        deviceId
+      ).catch(() => {});
+      return;
+    }
+
+    if (mySeat !== null || hasAttemptedAutoJoin.current) return;
 
     if (prefs.nickname.trim()) {
       hasAttemptedAutoJoin.current = true;
-      joinOrReconnectSeat(code, uid, prefs.nickname).catch(() => {});
+      joinOrReconnectSeat(code, uid, prefs.nickname, deviceId).catch(() => {});
     }
-  }, [hydrated, roomLoaded, room, uid, mySeat, prefs.nickname, code]);
+  }, [
+    hydrated,
+    roomLoaded,
+    room,
+    uid,
+    mySeat,
+    needsReclaim,
+    mySeatPlayer?.name,
+    prefs.nickname,
+    code,
+    deviceId,
+  ]);
 
-  // 3. Presence tracking via Firebase onDisconnect
+  // 3. Presence tracking via Firebase onDisconnect (with serverTimestamp for 15s timeout)
   const roomCodePresent = Boolean(room?.code);
   useEffect(() => {
     if (!roomCodePresent || mySeat === null) return;
     return attachPresence(code, mySeat);
   }, [code, roomCodePresent, mySeat]);
 
-  // 4. Host Engine (with offline-host fallback): Trick Complete Auto-Advance
+  // Play subtle audio cue when any other human player goes offline or reconnects
+  const prevOnlineSigRef = useRef<string>("");
+  useEffect(() => {
+    if (!room) return;
+    const sig = ([0, 1, 2, 3] as SeatIndex[])
+      .map((s) => {
+        const p = room.seats[String(s)];
+        if (!p || p.isBot) return "B";
+        return p.online ? "1" : "0";
+      })
+      .join("");
+    if (prevOnlineSigRef.current && prevOnlineSigRef.current !== sig) {
+      const prevOnlineCount = (prevOnlineSigRef.current.match(/1/g) ?? []).length;
+      const currOnlineCount = (sig.match(/1/g) ?? []).length;
+      if (currOnlineCount !== prevOnlineCount) {
+        soundEngine.playPlayerStatus(currOnlineCount > prevOnlineCount);
+      }
+    }
+    prevOnlineSigRef.current = sig;
+  }, [room]);
+
+  // 4. Orchestrator Election (host if online, otherwise first online human seat)
   const game = room?.game ?? null;
   const gamePhase = game?.phase;
   const actionSeq = game?.actionSeq ?? -1;
   const fast = prefs.animationSpeed === "fast";
 
-  // Designate an active orchestrator: the host if online, otherwise the first online human seat
   const hostSeatPlayer = room
     ? Object.values(room.seats).find((s) => s && s.uid === room.hostUid)
     : null;
@@ -127,10 +186,33 @@ export default function RoomPage({
     : null;
   const isOrchestrator = Boolean(
     uid &&
-      (isHost ||
-        (!hostSeatPlayer?.online && firstOnlineHumanUid === uid))
+      (isHost || (!hostSeatPlayer?.online && firstOnlineHumanUid === uid))
   );
 
+  // 5. Orchestrator: 15-Second Offline Timeout -> AI Bot Takeover
+  useEffect(() => {
+    if (!isOrchestrator || !room || room.status !== "playing") return;
+
+    const timers: number[] = [];
+    for (const s of [0, 1, 2, 3] as SeatIndex[]) {
+      const p = room.seats[String(s)];
+      if (!p || p.isBot || p.online || p.botTakeover || !p.disconnectedAt) {
+        continue;
+      }
+      const elapsed = Date.now() - p.disconnectedAt;
+      const waitMs = Math.max(200, OFFLINE_TAKEOVER_MS - elapsed);
+      const t = window.setTimeout(() => {
+        activateBotTakeover(code, s).catch(() => {});
+      }, waitMs);
+      timers.push(t);
+    }
+
+    return () => {
+      timers.forEach((t) => window.clearTimeout(t));
+    };
+  }, [isOrchestrator, room, code]);
+
+  // 6. Orchestrator: Trick Complete Auto-Advance
   useEffect(() => {
     if (!isOrchestrator || !game || game.phase !== "TRICK_COMPLETE") return;
     const delay = fast ? 850 : 1450;
@@ -140,7 +222,7 @@ export default function RoomPage({
     return () => window.clearTimeout(timer);
   }, [isOrchestrator, code, gamePhase, actionSeq, fast, game]);
 
-  // 4b. Orchestrator Engine: Auto-Deal Everyone After Blind 5th-8th Trump Card Reveal
+  // 7. Orchestrator: Auto-Deal Everyone After Blind 5th-8th Trump Card Reveal
   useEffect(() => {
     if (!isOrchestrator || !game || game.phase !== "REVEAL_TRUMP_CARD") return;
     const delay = fast ? 1400 : 2400;
@@ -150,79 +232,129 @@ export default function RoomPage({
     return () => window.clearTimeout(timer);
   }, [isOrchestrator, code, gamePhase, actionSeq, fast, game]);
 
-  // 5. Orchestrator Engine: Smart AI Bot Moves (Trump Selection & Trick Play)
+  // 8. Orchestrator: Smart AI Bot Moves (for permanent bots AND 15s offline bot takeovers!)
+  const actingSeatForBot: SeatIndex | null =
+    game && (game.phase === "SELECT_TRUMP" || game.phase === "PLAYING")
+      ? game.phase === "SELECT_TRUMP"
+        ? game.trumpCaller
+        : game.currentTurn
+      : null;
+  const actingPlayerForBot =
+    actingSeatForBot !== null
+      ? room?.seats[String(actingSeatForBot)] ?? null
+      : null;
+  const shouldBotPlayNow = Boolean(
+    actingPlayerForBot &&
+      (actingPlayerForBot.isBot || actingPlayerForBot.botTakeover)
+  );
+
   useEffect(() => {
-    if (!isOrchestrator || !room || !game) return;
-    if (game.phase !== "SELECT_TRUMP" && game.phase !== "PLAYING") return;
-
-    const actingSeat: SeatIndex =
-      game.phase === "SELECT_TRUMP" ? game.trumpCaller : game.currentTurn;
-    const actingPlayer = room.seats[String(actingSeat)];
-
-    if (!actingPlayer || !actingPlayer.isBot) return;
+    if (
+      !isOrchestrator ||
+      !room ||
+      !game ||
+      actingSeatForBot === null ||
+      !shouldBotPlayNow
+    ) {
+      return;
+    }
 
     const delay = fast ? 480 : 850;
     const timer = window.setTimeout(() => {
-      const hand = game.hands[String(actingSeat)] ?? [];
+      const hand = game.hands[String(actingSeatForBot)] ?? [];
       if (hand.length === 0) return;
 
       if (game.phase === "SELECT_TRUMP") {
         const decision = chooseBotTrumpDecision(hand);
         if (decision.type === "BLIND") {
-          submitBlindTrumpCard(code, actingSeat, decision.position).catch(
+          submitBlindTrumpCard(code, actingSeatForBot, decision.position).catch(
             () => {}
           );
         } else {
-          submitTrumpChoice(code, actingSeat, decision.suit).catch(() => {});
+          submitTrumpChoice(code, actingSeatForBot, decision.suit).catch(
+            () => {}
+          );
         }
       } else if (game.phase === "PLAYING" && game.trumpSuit) {
         const card = chooseBotCard(
           hand,
           game.currentTrick,
           game.trumpSuit,
-          actingSeat
+          actingSeatForBot
         );
-        submitCardPlay(code, actingSeat, card.id).catch(() => {});
+        submitCardPlay(code, actingSeatForBot, card.id).catch(() => {});
       }
     }, delay);
 
     return () => window.clearTimeout(timer);
-  }, [isOrchestrator, code, room, game, gamePhase, actionSeq, fast]);
+  }, [
+    isOrchestrator,
+    code,
+    room,
+    game,
+    gamePhase,
+    actionSeq,
+    fast,
+    actingSeatForBot,
+    shouldBotPlayNow,
+  ]);
 
-  // 6. Orchestrator Engine: Turn Timer Auto-Move for Human Players
+  // 9. Orchestrator: Turn Timer Auto-Move for Online Human Players
   useEffect(() => {
-    if (!isOrchestrator || !room || !game) return;
+    if (
+      !isOrchestrator ||
+      !room ||
+      !game ||
+      actingSeatForBot === null ||
+      shouldBotPlayNow
+    ) {
+      return;
+    }
     const limitSec = room.settings.turnTimer;
     if (limitSec <= 0) return;
-    if (game.phase !== "SELECT_TRUMP" && game.phase !== "PLAYING") return;
-
-    const actingSeat: SeatIndex =
-      game.phase === "SELECT_TRUMP" ? game.trumpCaller : game.currentTurn;
-    const actingPlayer = room.seats[String(actingSeat)];
-    if (!actingPlayer || actingPlayer.isBot) return;
 
     const elapsedMs = Date.now() - game.turnStartedAt;
     const remainingMs = Math.max(400, limitSec * 1000 - elapsedMs + 400);
 
     const timer = window.setTimeout(() => {
-      const hand = game.hands[String(actingSeat)] ?? [];
+      const hand = game.hands[String(actingSeatForBot)] ?? [];
       if (hand.length === 0) return;
       if (game.phase === "SELECT_TRUMP") {
         const suit = chooseBotTrumpSuit(hand);
-        submitTrumpChoice(code, actingSeat, suit).catch(() => {});
+        submitTrumpChoice(code, actingSeatForBot, suit).catch(() => {});
       } else if (game.phase === "PLAYING" && game.trumpSuit) {
         const card = chooseBotCard(
           hand,
           game.currentTrick,
           game.trumpSuit,
-          actingSeat
+          actingSeatForBot
         );
-        submitCardPlay(code, actingSeat, card.id).catch(() => {});
+        submitCardPlay(code, actingSeatForBot, card.id).catch(() => {});
       }
     }, remainingMs);
 
     return () => window.clearTimeout(timer);
-  }, [isOrchestrator, code, room, game, gamePhase, actionSeq]);
+  }, [
+    isOrchestrator,
+    code,
+    room,
+    game,
+    gamePhase,
+    actionSeq,
+    actingSeatForBot,
+    shouldBotPlayNow,
+  ]);
+
+  // 10. Auto-delete Finished Match from Firebase RTDB after grace TTL so DB never fills up
+  useEffect(() => {
+    if (!isOrchestrator || !room || room.status !== "finished") return;
+    const finishedAt = room.finishedAt ?? Date.now();
+    const waitMs = Math.max(1000, FINISHED_ROOM_TTL_MS - (Date.now() - finishedAt));
+    const timer = window.setTimeout(() => {
+      deleteRoom(code).catch(() => {});
+    }, waitMs);
+    return () => window.clearTimeout(timer);
+  }, [isOrchestrator, room, code]);
 
   const handleConfirmInviteName = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -233,7 +365,7 @@ export default function RoomPage({
       soundEngine.playClick();
       setNickname(clean);
       hasAttemptedAutoJoin.current = true;
-      await joinOrReconnectSeat(code, uid, clean);
+      await joinOrReconnectSeat(code, uid, clean, deviceId);
     } finally {
       setJoiningSeat(false);
     }
@@ -241,8 +373,12 @@ export default function RoomPage({
 
   const handleLeave = async () => {
     if (uid && room) {
-      await leaveLobbySeat(code, uid).catch(() => {});
+      await leaveLobbySeat(code, uid, deviceId).catch(() => {});
     }
+    router.push("/");
+  };
+
+  const handleRoomClosed = () => {
     router.push("/");
   };
 
@@ -278,13 +414,16 @@ export default function RoomPage({
           game={room.game}
           uid={uid ?? ""}
           mySeat={mySeat}
+          onRoomClosed={handleRoomClosed}
         />
       ) : (
         <LobbyView
           room={room}
           uid={uid ?? ""}
+          deviceId={deviceId}
           mySeat={mySeat}
           nickname={prefs.nickname || tempName || "Player"}
+          onRoomClosed={handleRoomClosed}
         />
       )}
 

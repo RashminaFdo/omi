@@ -24,6 +24,10 @@ export interface SeatPlayer {
   isBot: boolean;
   online: boolean;
   joinedAt: number;
+  // Persistent machine/device identity for exclusive reconnect & 15s bot takeover
+  deviceId?: string | null;
+  disconnectedAt?: number | null;
+  botTakeover?: boolean;
 }
 
 export interface RoomSettings {
@@ -92,6 +96,7 @@ export interface GameState {
   lastTrickCut: boolean;
   hands: Record<string, Card[]>; // seat index "0".."3" -> cards currently in hand
   pendingSecondDeal: Record<string, Card[]> | null; // remaining cards before trump deal completes
+  wonTricksBySeat: Record<string, Card[][]>; // tricks won by each seat in the current hand
   tricksWon: Record<TeamId, number>;
   scores: Record<TeamId, number>; // Keta tokens, first to 10 wins
   carryOverBonus: number; // Seporu bonus stack
@@ -121,6 +126,7 @@ export interface RoomData {
   status: "lobby" | "playing" | "finished";
   createdAt: number;
   updatedAt: number;
+  finishedAt?: number | null;
   settings: RoomSettings;
   seats: Record<string, SeatPlayer | null>; // keys "0", "1", "2", "3"
   game: GameState | null;

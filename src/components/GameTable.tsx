@@ -5,16 +5,21 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   Bot,
   Crown,
+  Flame,
   MessageSquareHeart,
   RotateCcw,
   ShieldAlert,
   Sparkles,
+  Trash2,
   Trophy,
+  WifiOff,
 } from "lucide-react";
 import { isRedSuit, SUIT_SYMBOL } from "@/lib/i18n";
 import { getTeam, SUITS } from "@/lib/omiEngine";
 import {
   dealNextHand,
+  deleteRoom,
+  OFFLINE_TAKEOVER_MS,
   returnRoomToLobby,
   sendTableEmote,
   startMatch,
@@ -34,12 +39,14 @@ import type {
 } from "@/lib/types";
 import { KetaTokens } from "./KetaTokens";
 import { CardBack, PlayingCard, SuitIcon } from "./PlayingCard";
+import { WonTricksPile } from "./WonTricksPile";
 
 interface GameTableProps {
   room: RoomData;
   game: GameState;
   uid: string;
   mySeat: SeatIndex | null;
+  onRoomClosed: () => void;
 }
 
 const EMOTE_KEYS: EmoteKey[] = [
@@ -53,19 +60,25 @@ const EMOTE_KEYS: EmoteKey[] = [
 
 const BLIND_POSITIONS: BlindCardPosition[] = [5, 6, 7, 8];
 
-// Position of each played card inside the center mat based on relative seat
+// Responsive card positions inside center mat by relative seat
 // rel 0 = Bottom, rel 1 = Right (anti-clockwise next), rel 2 = Top (Partner), rel 3 = Left
 const TRICK_CARD_OFFSET: Record<
   number,
   { x: number; y: number; enterX: number; enterY: number }
 > = {
-  0: { x: 0, y: 42, enterX: 0, enterY: 130 },
-  1: { x: 64, y: 0, enterX: 150, enterY: 0 },
-  2: { x: 0, y: -42, enterX: 0, enterY: -130 },
-  3: { x: -64, y: 0, enterX: -150, enterY: 0 },
+  0: { x: 0, y: 34, enterX: 0, enterY: 120 },
+  1: { x: 52, y: 0, enterX: 140, enterY: 0 },
+  2: { x: 0, y: -34, enterX: 0, enterY: -120 },
+  3: { x: -52, y: 0, enterX: -140, enterY: 0 },
 };
 
-export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
+export function GameTable({
+  room,
+  game,
+  uid,
+  mySeat,
+  onRoomClosed,
+}: GameTableProps) {
   const { prefs, dict } = useSettings();
   const [submittingSeq, setSubmittingSeq] = useState<number | null>(null);
   const [emoteOpen, setEmoteOpen] = useState(false);
@@ -76,25 +89,38 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
   const baseSeat: SeatIndex = mySeat ?? 0;
   const myTeam = mySeat !== null ? getTeam(mySeat) : null;
   const fast = prefs.animationSpeed === "fast";
-  const animDuration = fast ? 0.18 : 0.34;
+  const animDuration = fast ? 0.17 : 0.32;
 
-  // Map visual positions (Bottom=0, Right=1, Top=2, Left=3) -> actual seat index
   const seatAtRel = (rel: 0 | 1 | 2 | 3): SeatIndex =>
     ((baseSeat + rel) % 4) as SeatIndex;
 
   const relOfSeat = (seat: SeatIndex): 0 | 1 | 2 | 3 =>
     (((seat - baseSeat + 4) % 4) as 0 | 1 | 2 | 3);
 
-  // Tick clock for countdown timer and expiring emote bubbles
+  // Tick clock for turn countdown, 15s offline countdown, and emote expiry
   useEffect(() => {
     const id = window.setInterval(() => setNowTs(Date.now()), 300);
     return () => window.clearInterval(id);
   }, []);
 
+  // Track emote pop SFX
+  const lastEmoteIdsRef = useRef<string>("");
+  useEffect(() => {
+    const sig = Object.values(room.emotes ?? {})
+      .map((e) => e.id)
+      .sort()
+      .join("|");
+    if (lastEmoteIdsRef.current && sig && sig !== lastEmoteIdsRef.current) {
+      soundEngine.playEmotePop();
+    }
+    lastEmoteIdsRef.current = sig;
+  }, [room.emotes]);
+
   // Sound effect triggers driven by actionSeq transitions
   const prevSeqRef = useRef<number>(game.actionSeq);
   const prevPhaseRef = useRef<GameState["phase"]>(game.phase);
   const prevTrickLenRef = useRef<number>(game.currentTrick.length);
+  const prevTurnRef = useRef<SeatIndex>(game.currentTurn);
 
   useEffect(() => {
     if (game.actionSeq === prevSeqRef.current) return;
@@ -104,10 +130,14 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
       prevPhaseRef.current !== "SELECT_TRUMP"
     ) {
       soundEngine.playCardDeal();
+      if (mySeat !== null && game.trumpCaller === mySeat) {
+        setTimeout(() => soundEngine.playTurnChime(), 300);
+      }
     } else if (
       game.phase === "REVEAL_TRUMP_CARD" &&
       prevPhaseRef.current !== "REVEAL_TRUMP_CARD"
     ) {
+      soundEngine.playCardFlip();
       soundEngine.playTrumpCall();
     } else if (
       game.phase === "PLAYING" &&
@@ -117,7 +147,7 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
       if (prevPhaseRef.current === "SELECT_TRUMP") {
         soundEngine.playTrumpCall();
       }
-      setTimeout(() => soundEngine.playCardDeal(), 200);
+      setTimeout(() => soundEngine.playCardDeal(), 180);
     } else if (game.currentTrick.length > prevTrickLenRef.current) {
       const latestPlay = game.currentTrick[game.currentTrick.length - 1];
       soundEngine.playCardSlap(Boolean(latestPlay?.isCut));
@@ -133,7 +163,7 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
     ) {
       const res = game.lastHandResult;
       if (res?.outcomeType === "REVOKE") {
-        soundEngine.playSeporu();
+        soundEngine.playRevokeAlarm();
       } else if (res?.outcomeType === "KAPOTHI" || game.phase === "GAME_OVER") {
         soundEngine.playKapothiFanfare();
       } else if (res?.outcomeType === "SEPORU") {
@@ -145,10 +175,21 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
       }
     }
 
+    // Gentle chime + mobile haptic tap when it becomes your turn
+    if (
+      mySeat !== null &&
+      game.phase === "PLAYING" &&
+      game.currentTurn === mySeat &&
+      (prevTurnRef.current !== mySeat || prevPhaseRef.current !== "PLAYING")
+    ) {
+      soundEngine.playTurnChime();
+    }
+
     prevSeqRef.current = game.actionSeq;
     prevPhaseRef.current = game.phase;
     prevTrickLenRef.current = game.currentTrick.length;
-  }, [game, myTeam]);
+    prevTurnRef.current = game.currentTurn;
+  }, [game, myTeam, mySeat]);
 
   const myHand = useMemo(
     () => game.hands[String(baseSeat)] ?? [],
@@ -174,6 +215,8 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
         )
       : null;
 
+  const isMatchPoint = game.scores.A >= 8 || game.scores.B >= 8;
+
   const handleSelectTrump = async (suit: Suit) => {
     if (!isMyTrumpTurn || submitting || mySeat === null) return;
     setSubmittingSeq(game.actionSeq);
@@ -188,14 +231,13 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
     if (!isMyTrumpTurn || submitting || mySeat === null) return;
     setSubmittingSeq(game.actionSeq);
     try {
+      soundEngine.playCardFlip();
       await submitBlindTrumpCard(room.code, mySeat, position);
     } catch {
       setSubmittingSeq(null);
     }
   };
 
-  // All cards in hand are playable with NO forced site suggestions/blocking.
-  // Failing to follow suit while holding the led suit triggers a Revoke loss in the engine!
   const handlePlayCard = async (cardId: string) => {
     if (!isMyPlayTurn || submitting || mySeat === null) return;
     setSubmittingSeq(game.actionSeq);
@@ -213,13 +255,31 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
     await sendTableEmote(room.code, mySeat, key);
   };
 
-  // Active emotes (< 4.5s old)
+  const handleCloseFinishedRoom = async () => {
+    soundEngine.playClick();
+    await deleteRoom(room.code).catch(() => {});
+    onRoomClosed();
+  };
+
   const getActiveEmote = (seat: SeatIndex) => {
     const ev = room.emotes?.[String(seat)];
     if (!ev) return null;
     if (nowTs - ev.timestamp > 4500) return null;
     return ev;
   };
+
+  // Directional exit target when a trick finishes and slides to the winning player
+  const trickWinnerExit = useMemo(() => {
+    if (game.lastTrickWinner === null) return { x: 0, y: 0 };
+    const rel = (((game.lastTrickWinner - baseSeat + 4) % 4) as 0 | 1 | 2 | 3);
+    const map: Record<number, { x: number; y: number }> = {
+      0: { x: 0, y: 150 },
+      1: { x: 170, y: 0 },
+      2: { x: 0, y: -150 },
+      3: { x: -170, y: 0 },
+    };
+    return map[rel];
+  }, [game.lastTrickWinner, baseSeat]);
 
   const renderSeatBadge = (rel: 0 | 1 | 2 | 3) => {
     const seat = seatAtRel(rel);
@@ -233,11 +293,26 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
     const isDealer = game.dealerSeat === seat;
     const isTrumpCaller = game.trumpCaller === seat;
     const cardCount = game.hands[String(seat)]?.length ?? 0;
+    const wonTricks = game.wonTricksBySeat?.[String(seat)] ?? [];
     const emote = getActiveEmote(seat);
     const isPartner = mySeat !== null && rel === 2;
 
+    const isOfflineHuman = !player.isBot && !player.online;
+    const offlineSecsLeft =
+      isOfflineHuman && !player.botTakeover && player.disconnectedAt
+        ? Math.max(
+            0,
+            Math.ceil(
+              (OFFLINE_TAKEOVER_MS - (nowTs - player.disconnectedAt)) / 1000
+            )
+          )
+        : null;
+
+    const placement: "bottom" | "top" | "left" | "right" =
+      rel === 0 ? "bottom" : rel === 1 ? "right" : rel === 2 ? "top" : "left";
+
     return (
-      <div className="relative flex flex-col items-center gap-1.5">
+      <div className="relative flex flex-col items-center gap-1">
         {/* Floating Emote Bubble */}
         <AnimatePresence>
           {emote ? (
@@ -246,7 +321,7 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
               initial={{ opacity: 0, y: 8, scale: 0.85 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -8, scale: 0.85 }}
-              className="absolute -top-11 left-1/2 -translate-x-1/2 z-30 whitespace-nowrap rounded-full bg-amber-300 px-3 py-1 text-xs font-extrabold text-slate-950 shadow-xl"
+              className="absolute -top-10 left-1/2 -translate-x-1/2 z-30 whitespace-nowrap rounded-full bg-amber-300 px-2.5 py-1 text-[11px] sm:text-xs font-extrabold text-slate-950 shadow-xl"
             >
               {dict.emotes[emote.emoteKey].emoji}{" "}
               {dict.emotes[emote.emoteKey].label}
@@ -254,31 +329,42 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
           ) : null}
         </AnimatePresence>
 
-        {/* Opponent / Partner Mini Card Backs */}
+        {/* Opponent / Partner Card Backs + Won Tricks Pile side-by-side */}
         {rel !== 0 ? (
-          <div className="flex items-center justify-center -space-x-4 sm:-space-x-3.5 h-10 sm:h-11">
-            {Array.from({ length: cardCount }).map((_, idx) => (
-              <CardBack
-                key={idx}
-                design={prefs.cardBack}
-                size="xs"
-                className="shadow-md"
-              />
-            ))}
+          <div className="flex items-center justify-center gap-1.5 sm:gap-2 min-h-[38px] sm:min-h-[44px]">
+            {cardCount > 0 ? (
+              <div className="flex items-center justify-center -space-x-5 sm:-space-x-4">
+                {Array.from({ length: cardCount }).map((_, idx) => (
+                  <CardBack
+                    key={idx}
+                    design={prefs.cardBack}
+                    size="xs"
+                    className="shadow-md"
+                  />
+                ))}
+              </div>
+            ) : null}
+
+            <WonTricksPile
+              tricks={wonTricks}
+              trumpSuit={game.trumpSuit}
+              placement={placement}
+            />
           </div>
         ) : null}
 
         {/* Player Pill */}
         <div
-          className={`relative flex items-center gap-2 rounded-2xl px-2.5 sm:px-3.5 py-1.5 border backdrop-blur-md transition-all ${
-            isTurn
-              ? "bg-amber-400/20 border-amber-400 shadow-[0_0_24px_rgba(251,191,36,0.45)] scale-[1.03]"
+          className={`relative flex items-center gap-1.5 sm:gap-2 rounded-2xl px-2 sm:px-3 py-1 sm:py-1.5 border backdrop-blur-md transition-all ${
+            isOfflineHuman
+              ? "bg-rose-950/70 border-rose-400/60"
+              : isTurn
+              ? "bg-amber-400/20 border-amber-400 shadow-[0_0_22px_rgba(251,191,36,0.45)] scale-[1.03]"
               : "bg-black/45 border-white/15"
           }`}
         >
-          {/* Team indicator dot */}
           <span
-            className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+            className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full shrink-0 ${
               team === "A"
                 ? "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)]"
                 : "bg-slate-200 ring-1 ring-slate-500"
@@ -287,30 +373,34 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
 
           <div className="leading-tight min-w-0">
             <div className="flex items-center gap-1">
-              <span className="text-xs sm:text-sm font-bold text-white truncate max-w-[84px] sm:max-w-[120px]">
+              <span className="text-[11px] sm:text-sm font-bold text-white truncate max-w-[68px] sm:max-w-[115px]">
                 {player.name}
               </span>
               {player.isBot ? (
                 <Bot className="w-3 h-3 text-amber-300 shrink-0" />
+              ) : player.botTakeover ? (
+                <span className="inline-flex items-center gap-0.5 rounded bg-amber-400/25 border border-amber-400/50 px-1 py-0.2 text-[9px] font-black text-amber-200 shrink-0">
+                  <Bot className="w-2.5 h-2.5" />
+                  {dict.botTakeoverBadge}
+                </span>
+              ) : isOfflineHuman ? (
+                <WifiOff className="w-3 h-3 text-rose-400 animate-pulse shrink-0" />
               ) : (
-                <span
-                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                    player.online ? "bg-emerald-400" : "bg-rose-400"
-                  }`}
-                />
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
               )}
             </div>
-            <div className="flex items-center gap-1 text-[10px] text-white/60">
+
+            <div className="flex items-center gap-1 text-[9px] sm:text-[10px] text-white/60">
               <span>{team === "A" ? dict.teamA : dict.teamB}</span>
               {isPartner ? (
-                <span className="text-emerald-300 font-semibold">
+                <span className="text-emerald-300 font-semibold hidden xs:inline">
                   • {dict.partnerBadge}
                 </span>
               ) : null}
               {isDealer ? (
                 <span
                   title={dict.dealer}
-                  className="ml-0.5 rounded bg-white/15 px-1 font-bold text-white/90"
+                  className="rounded bg-white/15 px-1 font-bold text-white/90"
                 >
                   D
                 </span>
@@ -329,7 +419,7 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
           {/* Turn Countdown Pill */}
           {isTurn && remainingSeconds !== null ? (
             <span
-              className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-black tabular-nums ${
+              className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[9px] sm:text-[10px] font-black tabular-nums ${
                 remainingSeconds <= 5
                   ? "bg-rose-500 text-white animate-pulse"
                   : "bg-amber-400 text-slate-950"
@@ -339,6 +429,17 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
             </span>
           ) : null}
         </div>
+
+        {/* 15s Offline Countdown Alert Pill */}
+        {isOfflineHuman && !player.botTakeover && offlineSecsLeft !== null ? (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-full bg-rose-500/90 px-2 py-0.5 text-[9px] sm:text-[10px] font-black text-white shadow-md whitespace-nowrap"
+          >
+            {dict.offlineBotIn(offlineSecsLeft)}
+          </motion.div>
+        ) : null}
       </div>
     );
   };
@@ -363,12 +464,19 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
     ? room.seats[String(revokeInfo.offendingSeat)]?.name ?? ""
     : "";
 
+  // Check if any human player is currently subbed by AI
+  const botSubbedPlayer = Object.values(room.seats).find(
+    (p) => p && !p.isBot && p.botTakeover
+  );
+
+  const myWonTricks = game.wonTricksBySeat?.[String(baseSeat)] ?? [];
+
   return (
-    <div className="relative z-10 flex-1 flex flex-col justify-between overflow-hidden px-2 sm:px-5 pt-2 pb-3 select-none">
-      {/* Top HUD Row: Keta Tokens | Live Trick Counter | Selected Trump Card/Suit Badge */}
-      <div className="mx-auto w-full max-w-6xl flex flex-wrap items-start justify-between gap-2 z-20">
-        {/* Left: Keta Token Stack */}
-        <div className="w-full sm:w-auto sm:min-w-[270px]">
+    <div className="relative z-10 flex-1 h-[calc(100dvh-52px)] flex flex-col justify-between overflow-hidden px-1.5 sm:px-5 pt-1.5 pb-2 select-none">
+      {/* Top HUD Row: Keta Tokens | Tricks | Trump Symbol Only */}
+      <div className="mx-auto w-full max-w-6xl flex flex-wrap items-center justify-between gap-1.5 sm:gap-2 z-20">
+        {/* Desktop full 20-token stack; Mobile compact score chip */}
+        <div className="hidden sm:block sm:min-w-[270px]">
           <KetaTokens
             scores={game.scores}
             carryOverBonus={game.carryOverBonus}
@@ -377,63 +485,64 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
           />
         </div>
 
-        {/* Center/Right: Trick Counter + Selected Trump Card Display */}
-        <div className="flex items-center gap-2 ml-auto">
+        {/* Mobile ultra-compact Keta pill */}
+        <div className="sm:hidden glass-panel rounded-xl border border-white/15 px-2.5 py-1.5 flex items-center gap-2 text-xs font-black tabular-nums">
+          <span className="flex items-center gap-1 text-rose-300">
+            <span className="w-2 h-2 rounded-full bg-rose-500" />
+            {game.scores.A}
+          </span>
+          <span className="text-white/30">:</span>
+          <span className="flex items-center gap-1 text-slate-200">
+            <span className="w-2 h-2 rounded-full bg-slate-200" />
+            {game.scores.B}
+          </span>
+          <span className="text-[10px] font-semibold text-white/45">/10</span>
+          {game.carryOverBonus > 0 ? (
+            <span className="rounded bg-amber-400/25 px-1 text-[9px] text-amber-200">
+              +{game.carryOverBonus}
+            </span>
+          ) : null}
+        </div>
+
+        {/* Right Group: Match Point + Trick Counter + Trump SYMBOL-ONLY Badge */}
+        <div className="flex items-center gap-1.5 sm:gap-2 ml-auto">
+          {isMatchPoint ? (
+            <span className="hidden md:inline-flex items-center gap-1 rounded-full bg-rose-500/25 border border-rose-400/50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-rose-200 animate-pulse">
+              <Flame className="w-3 h-3" />
+              {dict.matchPoint}
+            </span>
+          ) : null}
+
           {/* Live Trick Counter */}
-          <div className="glass-panel rounded-2xl border border-white/15 px-3 py-2 text-center shadow-lg">
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-white/55">
-              {dict.hand} #{game.handNumber} • {dict.tricks} {game.trickNumber}/8
+          <div className="glass-panel rounded-xl sm:rounded-2xl border border-white/15 px-2.5 sm:px-3 py-1 sm:py-1.5 text-center shadow-lg">
+            <div className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider text-white/55">
+              {dict.hand} #{game.handNumber} • {game.trickNumber}/8
             </div>
-            <div className="mt-0.5 flex items-center justify-center gap-2.5 text-sm font-black tabular-nums">
-              <span className="text-rose-300">
-                {dict.teamA}: {game.tricksWon.A}
-              </span>
+            <div className="flex items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-black tabular-nums">
+              <span className="text-rose-300">{game.tricksWon.A}</span>
               <span className="text-white/30">–</span>
-              <span className="text-slate-200">
-                {dict.teamB}: {game.tricksWon.B}
-              </span>
+              <span className="text-slate-200">{game.tricksWon.B}</span>
             </div>
           </div>
 
-          {/* Top-of-Game Selected Trump Card / Suit Badge */}
-          <div className="glass-panel rounded-2xl border border-amber-400/50 bg-amber-400/[0.1] px-3 py-1.5 flex items-center gap-2.5 shadow-lg">
-            {game.revealedTrumpCard ? (
-              <>
-                <PlayingCard
-                  card={game.revealedTrumpCard}
-                  size="xs"
-                  isTrump
-                  className="shrink-0"
-                />
-                <div className="leading-tight">
-                  <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-amber-200/85">
-                    <span>{dict.trump}</span>
-                    {game.revealedTrumpCardPosition ? (
-                      <span className="rounded bg-amber-400/25 px-1 text-[9px] font-extrabold text-amber-200">
-                        {dict.blindCardLabel(game.revealedTrumpCardPosition)}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="text-xs sm:text-sm font-extrabold text-white">
-                    {game.revealedTrumpCard.rank}{" "}
-                    {SUIT_SYMBOL[game.revealedTrumpCard.suit]}{" "}
-                    {dict.suits[game.revealedTrumpCard.suit]}
-                  </div>
-                </div>
-              </>
-            ) : game.trumpSuit ? (
+          {/* Top-of-Game Selected Trump Display — SYMBOL ONLY! */}
+          <div className="glass-panel rounded-xl sm:rounded-2xl border border-amber-400/50 bg-amber-400/[0.1] px-2.5 sm:px-3 py-1 sm:py-1.5 flex items-center gap-2 shadow-lg">
+            {game.trumpSuit ? (
               <>
                 <span
-                  className={`w-9 h-12 rounded-lg bg-gradient-to-br from-white to-[#efeae0] border border-amber-400/70 flex flex-col items-center justify-center shadow ${
+                  className={`w-7 h-9 sm:w-9 sm:h-11 rounded-lg bg-gradient-to-br from-white to-[#efeae0] border border-amber-400/75 flex items-center justify-center shadow ${
                     isRedSuit(game.trumpSuit)
                       ? "text-[#c81e32]"
                       : "text-[#171c28]"
                   }`}
                 >
-                  <SuitIcon suit={game.trumpSuit} className="w-5 h-5" />
+                  <SuitIcon
+                    suit={game.trumpSuit}
+                    className="w-4 h-4 sm:w-5 sm:h-5"
+                  />
                 </span>
-                <div className="leading-tight">
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-amber-200/80">
+                <div className="leading-tight hidden xs:block">
+                  <div className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider text-amber-200/80">
                     {dict.trump}
                   </div>
                   <div className="text-xs sm:text-sm font-extrabold text-white">
@@ -442,11 +551,11 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
                 </div>
               </>
             ) : (
-              <div className="leading-tight px-1 py-1">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-amber-200/80">
+              <div className="leading-tight px-1 py-0.5">
+                <div className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider text-amber-200/80">
                   {dict.trump}
                 </div>
-                <div className="text-xs font-bold text-white/75 animate-pulse">
+                <div className="text-[11px] sm:text-xs font-bold text-white/75 animate-pulse">
                   {trumpCallerName}...
                 </div>
               </div>
@@ -455,24 +564,31 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
         </div>
       </div>
 
-      {/* Middle Arena: Top Partner | Left Opponent + Center Table Mat + Right Opponent */}
-      <div className="relative flex-1 flex flex-col items-center justify-center my-1 min-h-[260px] sm:min-h-[330px]">
-        {/* Top Seat (Partner, rel 2) */}
-        <div className="mb-2 sm:mb-3 z-20">{renderSeatBadge(2)}</div>
+      {/* Subtle Bot Sub Banner when a player is temporarily replaced after 15s offline */}
+      {botSubbedPlayer ? (
+        <div className="mx-auto mt-1 rounded-full bg-amber-500/20 border border-amber-400/40 px-3 py-0.5 text-[10px] sm:text-xs font-semibold text-amber-200 text-center z-20">
+          🤖 {dict.botTakeoverBanner(botSubbedPlayer.name)}
+        </div>
+      ) : null}
 
-        <div className="w-full max-w-5xl flex items-center justify-between gap-2 sm:gap-4 px-1">
+      {/* Middle Arena: Top Partner | Left Opponent + Center Table Mat + Right Opponent */}
+      <div className="relative flex-1 flex flex-col items-center justify-center min-h-0 my-0.5">
+        {/* Top Seat (Partner, rel 2) */}
+        <div className="mb-1 sm:mb-2 z-20">{renderSeatBadge(2)}</div>
+
+        <div className="w-full max-w-5xl flex items-center justify-between gap-1 sm:gap-4 px-0.5 sm:px-2">
           {/* Left Seat (rel 3) */}
           <div className="z-20 shrink-0">{renderSeatBadge(3)}</div>
 
           {/* Center Trick Mat */}
-          <div className="relative flex-1 max-w-[360px] sm:max-w-[460px] min-h-[195px] sm:min-h-[235px] rounded-[48px] border border-amber-300/25 bg-black/20 shadow-[inset_0_0_40px_rgba(0,0,0,0.45)] flex items-center justify-center px-2 py-2">
+          <div className="relative flex-1 max-w-[260px] xs:max-w-[300px] sm:max-w-[440px] min-h-[155px] sm:min-h-[215px] rounded-[36px] sm:rounded-[48px] border border-amber-300/25 bg-black/20 shadow-[inset_0_0_36px_rgba(0,0,0,0.45)] flex items-center justify-center px-2 py-2">
             {/* Subtle Center Crest Watermark */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/omi-logo.png"
               alt=""
               aria-hidden="true"
-              className="pointer-events-none w-24 h-24 sm:w-32 sm:h-32 object-contain opacity-[0.12] select-none"
+              className="pointer-events-none w-20 h-20 sm:w-28 sm:h-28 object-contain opacity-[0.12] select-none"
             />
 
             {/* Played Cards in Current Trick */}
@@ -503,8 +619,10 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
                         }}
                         exit={{
                           opacity: 0,
-                          scale: 0.55,
-                          transition: { duration: animDuration * 0.7 },
+                          x: trickWinnerExit.x,
+                          y: trickWinnerExit.y,
+                          scale: 0.45,
+                          transition: { duration: animDuration * 0.85 },
                         }}
                         transition={{
                           type: "spring",
@@ -533,15 +651,15 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
                   initial={{ opacity: 0, scale: 0.92 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.92 }}
-                  className="relative z-30 w-full rounded-3xl border border-amber-400/50 bg-[#08120f]/94 backdrop-blur-md p-3 sm:p-4 text-center shadow-2xl"
+                  className="relative z-30 w-full rounded-2xl sm:rounded-3xl border border-amber-400/50 bg-[#08120f]/95 backdrop-blur-md p-2.5 sm:p-4 text-center shadow-2xl"
                 >
                   {isMyTrumpTurn ? (
-                    <div className="space-y-3">
+                    <div className="space-y-2.5">
                       <div>
-                        <h3 className="text-sm sm:text-base font-extrabold text-amber-200">
+                        <h3 className="text-xs sm:text-base font-extrabold text-amber-200">
                           {dict.selectTrumpTitle}
                         </h3>
-                        <p className="text-[11px] text-white/65 mt-0.5">
+                        <p className="text-[10px] sm:text-[11px] text-white/65 mt-0.5">
                           {dict.selectTrumpSubtitle}
                         </p>
                       </div>
@@ -556,9 +674,9 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
                               type="button"
                               disabled={submitting}
                               whileHover={{ y: -3, scale: 1.04 }}
-                              whileTap={{ scale: 0.95 }}
+                              whileTap={{ scale: 0.94 }}
                               onClick={() => handleSelectTrump(suit)}
-                              className="flex flex-col items-center justify-center gap-0.5 rounded-2xl bg-white hover:bg-amber-50 py-2 px-1 shadow-lg border-2 border-transparent hover:border-amber-400 transition"
+                              className="flex flex-col items-center justify-center gap-0.5 rounded-xl sm:rounded-2xl bg-white hover:bg-amber-50 py-1.5 sm:py-2 px-1 shadow-lg border-2 border-transparent hover:border-amber-400 transition"
                             >
                               <SuitIcon
                                 suit={suit}
@@ -567,7 +685,7 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
                                 }`}
                               />
                               <span
-                                className={`text-[10px] sm:text-[11px] font-extrabold ${
+                                className={`text-[9px] sm:text-[11px] font-extrabold ${
                                   red ? "text-[#c81e32]" : "text-[#171c28]"
                                 }`}
                               >
@@ -579,11 +697,11 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
                       </div>
 
                       {/* Option B: Blind pick 5th, 6th, 7th, or 8th card */}
-                      <div className="pt-2.5 border-t border-white/15">
-                        <p className="text-[11px] font-semibold text-amber-200/85 mb-2">
+                      <div className="pt-2 border-t border-white/15">
+                        <p className="text-[10px] sm:text-[11px] font-semibold text-amber-200/85 mb-1.5">
                           {dict.orPickBlindCard}
                         </p>
-                        <div className="flex items-center justify-center gap-2 sm:gap-3">
+                        <div className="flex items-center justify-center gap-1.5 sm:gap-3">
                           {BLIND_POSITIONS.map((pos) => (
                             <motion.button
                               key={pos}
@@ -596,10 +714,10 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
                             >
                               <CardBack
                                 design={prefs.cardBack}
-                                size="sm"
-                                className="ring-1 ring-amber-400/50 group-hover:ring-2 group-hover:ring-amber-300 group-hover:shadow-[0_0_18px_rgba(251,191,36,0.5)] transition"
+                                size="xs"
+                                className="sm:w-10 sm:h-14 ring-1 ring-amber-400/50 group-hover:ring-2 group-hover:ring-amber-300 transition"
                               />
-                              <span className="rounded-full bg-amber-400/20 border border-amber-400/40 px-2 py-0.5 text-[10px] font-black text-amber-200 group-hover:bg-amber-400 group-hover:text-slate-950 transition">
+                              <span className="rounded-full bg-amber-400/20 border border-amber-400/40 px-1.5 py-0.5 text-[9px] sm:text-[10px] font-black text-amber-200 group-hover:bg-amber-400 group-hover:text-slate-950 transition">
                                 {dict.blindCardLabel(pos)}
                               </span>
                             </motion.button>
@@ -608,12 +726,12 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
                       </div>
                     </div>
                   ) : (
-                    <div className="py-4 px-2 space-y-1.5">
-                      <Sparkles className="w-6 h-6 text-amber-300 mx-auto animate-pulse" />
+                    <div className="py-3 px-2 space-y-1">
+                      <Sparkles className="w-5 h-5 text-amber-300 mx-auto animate-pulse" />
                       <p className="text-xs sm:text-sm font-bold text-amber-100">
                         {dict.waitingForTrump(activePlayerName)}
                       </p>
-                      <p className="text-[11px] text-white/60">
+                      <p className="text-[10px] sm:text-[11px] text-white/60">
                         {dict.waitingForCardsAfterTrump(activePlayerName)}
                       </p>
                     </div>
@@ -622,7 +740,7 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
               ) : null}
             </AnimatePresence>
 
-            {/* Blind Trump Card Reveal Overlay (Visible to ALL players!) */}
+            {/* Blind Trump Card Reveal Overlay */}
             <AnimatePresence>
               {game.phase === "REVEAL_TRUMP_CARD" &&
               game.revealedTrumpCard &&
@@ -631,9 +749,9 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
                   initial={{ opacity: 0, scale: 0.88 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.9 }}
-                  className="relative z-30 w-full rounded-3xl border border-amber-400/60 bg-[#08120f]/95 backdrop-blur-md p-4 text-center shadow-2xl flex flex-col items-center gap-2.5"
+                  className="relative z-30 w-full rounded-2xl sm:rounded-3xl border border-amber-400/60 bg-[#08120f]/95 backdrop-blur-md p-3 sm:p-4 text-center shadow-2xl flex flex-col items-center gap-2"
                 >
-                  <p className="text-xs font-bold text-amber-200/90">
+                  <p className="text-[11px] sm:text-xs font-bold text-amber-200/90">
                     {dict.dealerRevealedCard(
                       dealerName,
                       trumpCallerName,
@@ -648,20 +766,20 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
                   >
                     <PlayingCard
                       card={game.revealedTrumpCard}
-                      size="md"
+                      size="sm"
                       isTrump
                       isWinning
                     />
                   </motion.div>
 
                   <div>
-                    <p className="text-sm sm:text-base font-black text-amber-300">
+                    <p className="text-xs sm:text-base font-black text-amber-300">
                       {SUIT_SYMBOL[game.revealedTrumpCard.suit]}{" "}
                       {dict.trumpIsNow(
                         dict.suits[game.revealedTrumpCard.suit]
                       )}
                     </p>
-                    <p className="text-[11px] text-white/60 mt-0.5 animate-pulse">
+                    <p className="text-[10px] sm:text-[11px] text-white/60 animate-pulse">
                       {dict.dealingRemainingCards}
                     </p>
                   </div>
@@ -676,10 +794,10 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
-                  className="absolute -bottom-4 left-1/2 -translate-x-1/2 z-30 whitespace-nowrap rounded-full bg-amber-400 px-3.5 py-1 text-xs font-black text-slate-950 shadow-xl flex items-center gap-1.5"
+                  className="absolute -bottom-3.5 left-1/2 -translate-x-1/2 z-30 whitespace-nowrap rounded-full bg-amber-400 px-3 py-1 text-[11px] sm:text-xs font-black text-slate-950 shadow-xl flex items-center gap-1.5"
                 >
                   {game.lastTrickCut ? (
-                    <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[10px] text-white">
+                    <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[9px] sm:text-[10px] text-white">
                       ✂️ {dict.cutBanner}
                     </span>
                   ) : null}
@@ -694,14 +812,14 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
         </div>
       </div>
 
-      {/* Bottom Area: Turn Status + Player Seat Badge + Fanned Hand (NO card dimming/suggestions!) + Emotes */}
+      {/* Bottom Area: Seat Badge + Turn Status + Player's Own Won Pile + Fanned Hand + Emotes */}
       <div className="relative z-20 mx-auto w-full max-w-4xl flex flex-col items-center">
-        <div className="mb-2 flex flex-wrap items-center justify-center gap-2">
+        <div className="mb-1 sm:mb-1.5 flex flex-wrap items-center justify-center gap-2">
           {renderSeatBadge(0)}
 
           {game.phase === "PLAYING" ? (
             <div
-              className={`rounded-full px-3.5 py-1 text-xs font-bold border backdrop-blur-md ${
+              className={`rounded-full px-3 py-0.5 sm:py-1 text-[11px] sm:text-xs font-bold border backdrop-blur-md ${
                 isMyPlayTurn
                   ? "bg-amber-400/20 border-amber-400 text-amber-200 shadow-[0_0_16px_rgba(251,191,36,0.3)]"
                   : "bg-black/40 border-white/15 text-white/75"
@@ -710,34 +828,41 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
               {isMyPlayTurn ? dict.yourTurn : dict.playersTurn(activePlayerName)}
             </div>
           ) : null}
+
+          {/* Player's Own Won Tricks Stack right next to their hand! */}
+          <WonTricksPile
+            tricks={myWonTricks}
+            trumpSuit={game.trumpSuit}
+            placement="bottom"
+          />
         </div>
 
-        {/* Fanned Hand — all cards stay fully visible and clickable on your turn! */}
-        <div className="relative w-full flex items-end justify-center pt-3 pb-1 min-h-[118px] sm:min-h-[144px]">
-          <div className="flex items-end justify-center -space-x-5 sm:-space-x-4 md:-space-x-3 px-2 max-w-full">
+        {/* Fanned Hand — Super Mobile Friendly, zero dimming/hints */}
+        <div className="relative w-full flex items-end justify-center pt-2 pb-1 min-h-[106px] sm:min-h-[138px]">
+          <div className="flex items-end justify-center -space-x-6 xs:-space-x-5 sm:-space-x-4 md:-space-x-3 px-2 max-w-full">
             <AnimatePresence initial={false}>
               {myHand.map((card, index) => {
                 const count = myHand.length;
                 const mid = (count - 1) / 2;
                 const offset = index - mid;
-                const rotateDeg = offset * (count > 5 ? 2.8 : 3.5);
-                const archY = Math.abs(offset) * (count > 5 ? 3.5 : 4);
+                const rotateDeg = offset * (count > 5 ? 2.4 : 3.2);
+                const archY = Math.abs(offset) * (count > 5 ? 2.8 : 3.5);
 
                 return (
                   <motion.div
                     key={card.id}
                     layout
-                    initial={{ opacity: 0, y: 40, scale: 0.85 }}
+                    initial={{ opacity: 0, y: 36, scale: 0.85 }}
                     animate={{
                       opacity: 1,
                       y: isMyPlayTurn ? archY - 4 : archY,
                       rotate: rotateDeg,
                       scale: 1,
                     }}
-                    exit={{ opacity: 0, y: -40, scale: 0.8 }}
+                    exit={{ opacity: 0, y: -36, scale: 0.8 }}
                     transition={{ duration: animDuration }}
                     style={{ zIndex: index + 1 }}
-                    className="hover:!z-40"
+                    className="hover:!z-40 touch-manipulation"
                   >
                     <PlayingCard
                       card={card}
@@ -755,14 +880,14 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
 
           {/* Floating Quick Emotes Button */}
           {mySeat !== null ? (
-            <div className="absolute right-1 sm:right-2 bottom-2 z-30">
+            <div className="absolute right-0.5 sm:right-2 bottom-1.5 z-30">
               <AnimatePresence>
                 {emoteOpen ? (
                   <motion.div
                     initial={{ opacity: 0, y: 10, scale: 0.92 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 10, scale: 0.92 }}
-                    className="absolute bottom-12 right-0 w-52 rounded-2xl border border-white/15 bg-[#0c1412]/95 p-2 shadow-2xl grid grid-cols-1 gap-1"
+                    className="absolute bottom-11 right-0 w-48 sm:w-52 rounded-2xl border border-white/15 bg-[#0c1412]/95 p-1.5 shadow-2xl grid grid-cols-1 gap-1"
                   >
                     {EMOTE_KEYS.map((key) => (
                       <button
@@ -785,18 +910,18 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
                   setEmoteOpen((v) => !v);
                   soundEngine.playClick();
                 }}
-                className="rounded-full border border-amber-400/40 bg-black/60 hover:bg-amber-400/20 p-2.5 text-amber-300 shadow-lg backdrop-blur-md transition"
+                className="rounded-full border border-amber-400/40 bg-black/60 hover:bg-amber-400/20 p-2 sm:p-2.5 text-amber-300 shadow-lg backdrop-blur-md transition"
                 aria-label="Emotes"
                 title="Emotes"
               >
-                <MessageSquareHeart className="w-5 h-5" />
+                <MessageSquareHeart className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
             </div>
           ) : null}
         </div>
       </div>
 
-      {/* Hand Summary & Match Victory Overlay (including Revoke Violation proof!) */}
+      {/* Hand Summary & Match Victory Overlay */}
       <AnimatePresence>
         {(game.phase === "HAND_SUMMARY" || game.phase === "GAME_OVER") &&
         game.lastHandResult ? (
@@ -804,13 +929,13 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-40 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4"
+            className="fixed inset-0 z-40 flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4"
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 16 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border border-amber-400/35 bg-[#0a1411]/95 p-6 text-center text-white shadow-2xl space-y-4"
+              className="w-full max-w-md max-h-[90dvh] overflow-y-auto rounded-3xl border border-amber-400/35 bg-[#0a1411]/95 p-5 sm:p-6 text-center text-white shadow-2xl space-y-4"
             >
               {/* Header Icon */}
               <div
@@ -878,7 +1003,7 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
 
               {/* Revoke Visual Proof Box */}
               {revokeInfo ? (
-                <div className="rounded-2xl border border-rose-400/40 bg-rose-500/10 p-4 space-y-3">
+                <div className="rounded-2xl border border-rose-400/40 bg-rose-500/10 p-3.5 sm:p-4 space-y-3">
                   <p className="text-xs sm:text-sm font-semibold text-rose-100">
                     {dict.revokeSubtitle(
                       offendingPlayerName,
@@ -922,7 +1047,7 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
               ) : null}
 
               {/* Trick & Token Breakdown */}
-              <div className="rounded-2xl bg-white/[0.04] border border-white/10 p-4 space-y-2.5 text-sm">
+              <div className="rounded-2xl bg-white/[0.04] border border-white/10 p-3.5 sm:p-4 space-y-2 text-xs sm:text-sm">
                 <div className="flex justify-between text-white/75">
                   <span>{dict.tricks}</span>
                   <span className="font-bold text-white tabular-nums">
@@ -979,27 +1104,37 @@ export function GameTable({ room, game, uid, mySeat }: GameTableProps) {
               {/* Action Buttons */}
               {isHost ? (
                 game.phase === "GAME_OVER" ? (
-                  <div className="grid grid-cols-2 gap-2.5 pt-1">
+                  <div className="space-y-2 pt-1">
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          soundEngine.playClick();
+                          returnRoomToLobby(room.code);
+                        }}
+                        className="rounded-xl border border-white/15 bg-white/[0.07] hover:bg-white/15 py-2.5 text-xs sm:text-sm font-bold text-white transition"
+                      >
+                        {dict.backToLobby}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          soundEngine.playCardDeal();
+                          startMatch(room.code);
+                        }}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 py-2.5 text-xs sm:text-sm font-black text-slate-950 transition"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                        {dict.playAgain}
+                      </button>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => {
-                        soundEngine.playClick();
-                        returnRoomToLobby(room.code);
-                      }}
-                      className="rounded-xl border border-white/15 bg-white/[0.07] hover:bg-white/15 py-3 text-xs sm:text-sm font-bold text-white transition"
+                      onClick={handleCloseFinishedRoom}
+                      className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl border border-rose-400/35 bg-rose-500/15 hover:bg-rose-500/25 py-2.5 text-xs font-bold text-rose-200 transition"
                     >
-                      {dict.backToLobby}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        soundEngine.playCardDeal();
-                        startMatch(room.code);
-                      }}
-                      className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 py-3 text-xs sm:text-sm font-black text-slate-950 transition"
-                    >
-                      <RotateCcw className="w-4 h-4" />
-                      {dict.playAgain}
+                      <Trash2 className="w-3.5 h-3.5" />
+                      {dict.closeRoom}
                     </button>
                   </div>
                 ) : (

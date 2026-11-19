@@ -169,6 +169,7 @@ export function createHandState(params: {
     lastTrickCut: false,
     hands: stage1Hands,
     pendingSecondDeal: pending,
+    wonTricksBySeat: { "0": [], "1": [], "2": [], "3": [] },
     tricksWon: { A: 0, B: 0 },
     scores: { ...params.scores },
     carryOverBonus: params.carryOverBonus,
@@ -588,6 +589,19 @@ export function advanceAfterTrick(
     B: state.tricksWon.B + (winnerTeam === "B" ? 1 : 0),
   };
 
+  // Record the 4 won cards into the winning player's face-down trick stack
+  const winnerKey = String(winnerSeat);
+  const wonCards = state.currentTrick.map((p) => p.card);
+  const updatedWonTricks: Record<string, Card[][]> = {
+    "0": [...(state.wonTricksBySeat?.["0"] ?? [])],
+    "1": [...(state.wonTricksBySeat?.["1"] ?? [])],
+    "2": [...(state.wonTricksBySeat?.["2"] ?? [])],
+    "3": [...(state.wonTricksBySeat?.["3"] ?? [])],
+  };
+  if (wonCards.length > 0) {
+    updatedWonTricks[winnerKey] = [...updatedWonTricks[winnerKey], wonCards];
+  }
+
   const totalTricksPlayed = newTricksWon.A + newTricksWon.B;
 
   if (totalTricksPlayed < 8) {
@@ -602,6 +616,7 @@ export function advanceAfterTrick(
       lastTrickWinner: null,
       lastTrickWinningCardId: null,
       lastTrickCut: false,
+      wonTricksBySeat: updatedWonTricks,
       tricksWon: newTricksWon,
       actionSeq: state.actionSeq + 1,
     };
@@ -639,6 +654,7 @@ export function advanceAfterTrick(
     lastTrickWinner: null,
     lastTrickWinningCardId: null,
     lastTrickCut: false,
+    wonTricksBySeat: updatedWonTricks,
     tricksWon: newTricksWon,
     scores: updatedScores,
     carryOverBonus: result.nextCarryOverBonus,
