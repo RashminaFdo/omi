@@ -610,6 +610,72 @@ export async function fillEmptySeatsWithBots(code: string): Promise<void> {
   });
 }
 
+/**
+ * Host action: drag-and-drop (or tap-to-swap) any seat with another seat in the lobby
+ * to arrange teams / partners.
+ */
+export async function swapSeats(
+  code: string,
+  fromSeat: SeatIndex,
+  toSeat: SeatIndex
+): Promise<void> {
+  if (fromSeat === toSeat) return;
+  const db = getFirebaseDb();
+  await runTransaction(ref(db, `rooms/${code}`), (current) => {
+    const room = normalizeRoomData(current as RoomData | null);
+    if (!room || room.status !== "lobby") return current;
+
+    const fromKey = String(fromSeat);
+    const toKey = String(toSeat);
+    const temp = room.seats[fromKey];
+    room.seats[fromKey] = room.seats[toKey];
+    room.seats[toKey] = temp;
+    room.updatedAt = Date.now();
+    return room;
+  });
+}
+
+/**
+ * Host action: randomly shuffle seated players across the 4 seats to form random teams.
+ */
+export async function shuffleTeams(code: string): Promise<void> {
+  const db = getFirebaseDb();
+  await runTransaction(ref(db, `rooms/${code}`), (current) => {
+    const room = normalizeRoomData(current as RoomData | null);
+    if (!room || room.status !== "lobby") return current;
+
+    const seats: (SeatPlayer | null)[] = [
+      room.seats["0"],
+      room.seats["1"],
+      room.seats["2"],
+      room.seats["3"],
+    ];
+
+    const occupiedCount = seats.filter(Boolean).length;
+    if (occupiedCount < 2) return current;
+
+    // Fisher-Yates shuffle across all 4 slots (or occupied slots when 4 players)
+    // Retry up to 4 times so the shuffle visibly changes at least one seat!
+    const beforeSig = seats.map((s) => s?.uid ?? "").join("|");
+    let shuffled = [...seats];
+    for (let attempt = 0; attempt < 4; attempt++) {
+      shuffled = [...seats];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      if (shuffled.map((s) => s?.uid ?? "").join("|") !== beforeSig) break;
+    }
+
+    room.seats["0"] = shuffled[0];
+    room.seats["1"] = shuffled[1];
+    room.seats["2"] = shuffled[2];
+    room.seats["3"] = shuffled[3];
+    room.updatedAt = Date.now();
+    return room;
+  });
+}
+
 export async function updateRoomSettings(
   code: string,
   partial: Partial<RoomSettings>

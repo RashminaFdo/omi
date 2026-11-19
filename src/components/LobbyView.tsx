@@ -3,13 +3,16 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import {
+  ArrowLeftRight,
   Bot,
   Check,
   Copy,
   Crown,
+  GripVertical,
   Link2,
   Play,
   Share2,
+  Shuffle,
   Timer,
   Trash2,
   UserPlus,
@@ -21,7 +24,9 @@ import {
   deleteRoom,
   fillEmptySeatsWithBots,
   removeBotFromSeat,
+  shuffleTeams,
   startMatch,
+  swapSeats,
   switchSeat,
   updateRoomSettings,
 } from "@/lib/roomService";
@@ -56,6 +61,14 @@ export function LobbyView({
   const [copiedCode, setCopiedCode] = useState(false);
   const [starting, setStarting] = useState(false);
   const [busySeat, setBusySeat] = useState<SeatIndex | null>(null);
+  const [shuffling, setShuffling] = useState(false);
+
+  // Host drag-and-drop & mobile tap-to-swap state
+  const [draggingSeat, setDraggingSeat] = useState<SeatIndex | null>(null);
+  const [dragOverSeat, setDragOverSeat] = useState<SeatIndex | null>(null);
+  const [selectedSwapSeat, setSelectedSwapSeat] = useState<SeatIndex | null>(
+    null
+  );
 
   const isHost = room.hostUid === uid;
   const filledCount = ([0, 1, 2, 3] as SeatIndex[]).filter(
@@ -101,7 +114,37 @@ export function LobbyView({
   };
 
   const handleSeatClick = async (seat: SeatIndex) => {
-    if (room.seats[String(seat)] !== null || busySeat !== null) return;
+    if (busySeat !== null) return;
+
+    // Host tap-to-swap flow (works seamlessly on mobile & desktop!)
+    if (isHost) {
+      if (selectedSwapSeat !== null) {
+        if (selectedSwapSeat === seat) {
+          setSelectedSwapSeat(null);
+          return;
+        }
+        const from = selectedSwapSeat;
+        setSelectedSwapSeat(null);
+        setBusySeat(seat);
+        try {
+          soundEngine.playCardFlip();
+          await swapSeats(room.code, from, seat);
+        } finally {
+          setBusySeat(null);
+        }
+        return;
+      }
+
+      // Clicking an occupied seat as host selects it to swap with another seat
+      if (room.seats[String(seat)] !== null) {
+        soundEngine.playClick();
+        setSelectedSwapSeat(seat);
+        return;
+      }
+    }
+
+    // Standard open-seat click: move yourself into that seat
+    if (room.seats[String(seat)] !== null) return;
     setBusySeat(seat);
     try {
       soundEngine.playClick();
@@ -111,11 +154,62 @@ export function LobbyView({
     }
   };
 
-  const handleDisband = async () => {
+  // HTML5 Drag & Drop handlers for Host
+  const handleDragStart = (e: React.DragEvent, seat: SeatIndex) => {
+    if (!isHost || !room.seats[String(seat)]) return;
+    setDraggingSeat(seat);
+    setSelectedSwapSeat(null);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", String(seat));
+  };
+
+  const handleDragOver = (e: React.DragEvent, seat: SeatIndex) => {
+    if (!isHost || draggingSeat === null) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragOverSeat !== seat) {
+      setDragOverSeat(seat);
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetSeat: SeatIndex) => {
+    e.preventDefault();
     if (!isHost) return;
-    soundEngine.playClick();
-    await deleteRoom(room.code).catch(() => {});
-    onRoomClosed();
+    const raw = e.dataTransfer.getData("text/plain");
+    const fromSeat =
+      draggingSeat !== null
+        ? draggingSeat
+        : raw !== ""
+        ? (Number(raw) as SeatIndex)
+        : null;
+    setDraggingSeat(null);
+    setDragOverSeat(null);
+
+    if (fromSeat === null || fromSeat === targetSeat) return;
+    setBusySeat(targetSeat);
+    try {
+      soundEngine.playCardFlip();
+      await swapSeats(room.code, fromSeat, targetSeat);
+    } finally {
+      setBusySeat(null);
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggingSeat(null);
+    setDragOverSeat(null);
+  };
+
+  const handleShuffleTeams = async () => {
+    if (!isHost || filledCount < 2 || shuffling) return;
+    setShuffling(true);
+    setSelectedSwapSeat(null);
+    try {
+      soundEngine.playCardDeal();
+      await shuffleTeams(room.code);
+    } finally {
+      setTimeout(() => setShuffling(false), 320);
+    }
   };
 
   const handleAddBot = async (e: React.MouseEvent, seat: SeatIndex) => {
@@ -133,6 +227,7 @@ export function LobbyView({
   const handleRemoveBot = async (e: React.MouseEvent, seat: SeatIndex) => {
     e.stopPropagation();
     if (!isHost || busySeat !== null) return;
+    setSelectedSwapSeat(null);
     setBusySeat(seat);
     try {
       soundEngine.playClick();
@@ -153,11 +248,24 @@ export function LobbyView({
     }
   };
 
+  const handleDisband = async () => {
+    if (!isHost) return;
+    soundEngine.playClick();
+    await deleteRoom(room.code).catch(() => {});
+    onRoomClosed();
+  };
+
   const renderSeatCard = (seat: SeatIndex) => {
     const player = room.seats[String(seat)];
     const team = seat === 0 || seat === 2 ? "A" : "B";
     const isMe = player?.uid === uid;
     const isSeatHost = player?.uid === room.hostUid;
+    const isSelectedForSwap = selectedSwapSeat === seat;
+    const isDropTarget =
+      (dragOverSeat === seat && draggingSeat !== seat) ||
+      (selectedSwapSeat !== null && selectedSwapSeat !== seat);
+    const isBeingDragged = draggingSeat === seat;
+
     const teamColor =
       team === "A"
         ? "border-rose-400/40 bg-rose-500/[0.08]"
@@ -169,10 +277,18 @@ export function LobbyView({
 
     if (!player) {
       return (
-        <motion.div
-          whileHover={{ scale: 1.02 }}
+        <div
+          onDragOver={(e) => handleDragOver(e, seat)}
+          onDragLeave={() =>
+            setDragOverSeat((cur) => (cur === seat ? null : cur))
+          }
+          onDrop={(e) => handleDrop(e, seat)}
           onClick={() => handleSeatClick(seat)}
-          className="group relative flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-white/25 bg-black/25 hover:bg-white/[0.07] hover:border-amber-400/60 p-4 min-h-[126px] cursor-pointer transition text-center"
+          className={`group relative flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed p-4 min-h-[128px] cursor-pointer transition text-center ${
+            isDropTarget
+              ? "border-amber-400 bg-amber-400/15 shadow-[0_0_24px_rgba(251,191,36,0.3)] scale-[1.02]"
+              : "border-white/25 bg-black/25 hover:bg-white/[0.07] hover:border-amber-400/60"
+          }`}
         >
           <span
             className={`absolute top-2.5 left-2.5 rounded-full border px-2 py-0.5 text-[10px] font-bold ${teamPill}`}
@@ -180,13 +296,19 @@ export function LobbyView({
             {team === "A" ? dict.teamA : dict.teamB}
           </span>
           <div className="w-9 h-9 rounded-full bg-white/5 border border-white/15 flex items-center justify-center text-white/50 group-hover:text-amber-300 group-hover:border-amber-400/50 transition">
-            <UserPlus className="w-4 h-4" />
+            {isDropTarget ? (
+              <ArrowLeftRight className="w-4 h-4 text-amber-300" />
+            ) : (
+              <UserPlus className="w-4 h-4" />
+            )}
           </div>
           <div>
             <p className="text-xs font-bold text-white/75">{dict.emptySeat}</p>
-            <p className="text-[11px] text-white/45">{dict.clickToSit}</p>
+            <p className="text-[11px] text-white/45">
+              {isDropTarget ? dict.tapSeatToSwap : dict.clickToSit}
+            </p>
           </div>
-          {isHost ? (
+          {isHost && !selectedSwapSeat ? (
             <button
               type="button"
               onClick={(e) => handleAddBot(e, seat)}
@@ -197,15 +319,32 @@ export function LobbyView({
               {dict.addBot}
             </button>
           ) : null}
-        </motion.div>
+        </div>
       );
     }
 
     return (
       <div
-        className={`relative flex flex-col items-center justify-center gap-1.5 rounded-2xl border p-4 min-h-[126px] text-center shadow-lg transition ${teamColor} ${
-          isMe ? "ring-2 ring-amber-400/80" : ""
-        }`}
+        draggable={isHost}
+        onDragStart={(e) => handleDragStart(e, seat)}
+        onDragOver={(e) => handleDragOver(e, seat)}
+        onDragLeave={() =>
+          setDragOverSeat((cur) => (cur === seat ? null : cur))
+        }
+        onDrop={(e) => handleDrop(e, seat)}
+        onDragEnd={handleDragEnd}
+        onClick={() => handleSeatClick(seat)}
+        className={`relative flex flex-col items-center justify-center gap-1.5 rounded-2xl border p-4 min-h-[128px] text-center shadow-lg transition select-none ${teamColor} ${
+          isHost ? "cursor-grab active:cursor-grabbing" : ""
+        } ${
+          isSelectedForSwap
+            ? "ring-2 ring-amber-300 bg-amber-400/20 shadow-[0_0_26px_rgba(251,191,36,0.45)] scale-[1.03]"
+            : isDropTarget
+            ? "ring-2 ring-amber-400/90 border-amber-400 bg-amber-400/15 scale-[1.02]"
+            : isMe
+            ? "ring-2 ring-amber-400/75"
+            : ""
+        } ${isBeingDragged ? "opacity-50 scale-95" : ""}`}
       >
         <span
           className={`absolute top-2.5 left-2.5 rounded-full border px-2 py-0.5 text-[10px] font-bold ${teamPill}`}
@@ -213,8 +352,11 @@ export function LobbyView({
           {team === "A" ? dict.teamA : dict.teamB}
         </span>
 
-        {/* Online / Bot status */}
-        <span className="absolute top-2.5 right-2.5 inline-flex items-center gap-1 text-[10px] font-semibold text-white/70">
+        {/* Online / Bot status + Drag Handle for Host */}
+        <div className="absolute top-2.5 right-2.5 inline-flex items-center gap-1.5 text-[10px] font-semibold text-white/70">
+          {isHost ? (
+            <GripVertical className="w-3.5 h-3.5 text-white/45" />
+          ) : null}
           {player.isBot ? (
             <Bot className="w-3.5 h-3.5 text-amber-300" />
           ) : (
@@ -226,7 +368,7 @@ export function LobbyView({
               }`}
             />
           )}
-        </span>
+        </div>
 
         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-300/25 to-amber-600/25 border border-amber-300/40 flex items-center justify-center text-base font-extrabold text-amber-200">
           {player.isBot ? (
@@ -260,7 +402,11 @@ export function LobbyView({
           </div>
         </div>
 
-        {isHost && player.isBot ? (
+        {isSelectedForSwap ? (
+          <span className="mt-0.5 rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-black text-slate-950">
+            {dict.tapSeatToSwap}
+          </span>
+        ) : isHost && player.isBot ? (
           <button
             type="button"
             onClick={(e) => handleRemoveBot(e, seat)}
@@ -275,8 +421,8 @@ export function LobbyView({
   };
 
   return (
-    <div className="relative z-10 flex-1 overflow-y-auto px-3 sm:px-6 py-5">
-      <div className="mx-auto max-w-5xl space-y-5">
+    <div className="relative z-10 flex-1 overflow-y-auto px-3 sm:px-6 py-4 sm:py-5">
+      <div className="mx-auto max-w-5xl space-y-4 sm:space-y-5">
         {/* Invite Banner */}
         <div className="glass-panel rounded-3xl border border-white/15 p-4 sm:p-5 shadow-2xl">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -348,7 +494,30 @@ export function LobbyView({
         {/* Main Grid: Visual 4-Seat Table + Host Controls */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
           {/* Visual 4-Seat Table */}
-          <div className="lg:col-span-8 glass-panel rounded-3xl border border-white/15 p-4 sm:p-6 shadow-2xl">
+          <div className="lg:col-span-8 glass-panel rounded-3xl border border-white/15 p-4 sm:p-6 shadow-2xl space-y-4">
+            {/* Host Team-Arrangement Bar (Drag hint + Shuffle Teams button) */}
+            {isHost ? (
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/10">
+                <p className="text-[11px] sm:text-xs text-white/65 flex items-center gap-1.5">
+                  <ArrowLeftRight className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                  <span>{dict.dragToArrange}</span>
+                </p>
+
+                <motion.button
+                  type="button"
+                  whileTap={{ scale: 0.94 }}
+                  disabled={filledCount < 2 || shuffling}
+                  onClick={handleShuffleTeams}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-amber-400/45 bg-amber-400/15 hover:bg-amber-400/25 disabled:opacity-40 disabled:cursor-not-allowed px-3 py-1.5 text-xs font-bold text-amber-200 transition shrink-0"
+                >
+                  <Shuffle
+                    className={`w-3.5 h-3.5 ${shuffling ? "animate-spin" : ""}`}
+                  />
+                  {dict.shuffleTeams}
+                </motion.button>
+              </div>
+            ) : null}
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
               {/* Top Seat: Seat 2 (Team A) */}
               <div className="sm:col-start-2">{renderSeatCard(2)}</div>
@@ -383,7 +552,7 @@ export function LobbyView({
             </div>
 
             {mySeat === null ? (
-              <p className="mt-4 text-center text-xs text-amber-200/80">
+              <p className="text-center text-xs text-amber-200/80">
                 {dict.spectatorNotice} — {dict.clickToSit}
               </p>
             ) : null}

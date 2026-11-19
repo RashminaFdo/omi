@@ -39,6 +39,9 @@ export interface I18nDict {
   addBot: string;
   removeBot: string;
   fillWithBots: string;
+  shuffleTeams: string;
+  dragToArrange: string;
+  tapSeatToSwap: string;
   startGame: string;
   waitingForPlayers: string;
   waitingForHost: string;
@@ -182,6 +185,9 @@ const en: I18nDict = {
   addBot: "+ AI Bot",
   removeBot: "Remove",
   fillWithBots: "Fill Empty Seats with Bots",
+  shuffleTeams: "Shuffle Teams",
+  dragToArrange: "Host: Drag players between seats (or tap two seats) to arrange teams",
+  tapSeatToSwap: "Tap any seat to swap here",
   startGame: "Deal & Start Match",
   waitingForPlayers: "Fill all 4 seats to start (invite friends or add AI bots)",
   waitingForHost: "Waiting for host to start...",
@@ -372,6 +378,9 @@ const si: I18nDict = {
   addBot: "+ AI බොට්",
   removeBot: "ඉවත් කරන්න",
   fillWithBots: "හිස් තැන් වලට බොට්ලා දාන්න",
+  shuffleTeams: "පිල් මිශ්‍ර කරන්න",
+  dragToArrange: "ප්‍රධානියා: පිල් හදන්න ක්‍රීඩකයන් ඇදලා දාන්න (හෝ අසුන් 2ක් ඔබන්න)",
+  tapSeatToSwap: "මාරු කරන්න වෙන අසුනක් ඔබන්න",
   startGame: "අනනවා • අත අරඹන්න",
   waitingForPlayers: "අසුන් 4ම පිරුණාම අත අරඹන්න පුළුවන් (යාලුවන්ට ලින්ක් එක යවන්න හෝ බොට්ලා දාන්න)",
   waitingForHost: "ප්‍රධානියා අත අරඹනකල් පොඩ්ඩක් ඉන්න...",
