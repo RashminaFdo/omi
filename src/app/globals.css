@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-jakarta), var(--font-sinhala), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono), ui-monospace, SFMono-Regular, monospace;
+}
+
+html,
+body {
+  background-color: #06130f;
+  color: #f8fafc;
+  font-family: var(--font-jakarta), var(--font-sinhala), system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Casino Felt Themes */
+.felt-emerald {
+  background: radial-gradient(circle at 50% 42%, #114737 0%, #0a2c22 52%, #051611 100%);
+}
+
+.felt-navy {
+  background: radial-gradient(circle at 50% 42%, #152c5b 0%, #0c1a3a 52%, #050b1c 100%);
+}
+
+.felt-slate {
+  background: radial-gradient(circle at 50% 42%, #242b38 0%, #141821 52%, #090b10 100%);
+}
+
+/* Subtle micro-weave felt grain */
+.felt-texture {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 0),
+    radial-gradient(rgba(0, 0, 0, 0.18) 1px, transparent 0);
+  background-size: 16px 16px;
+  background-position: 0 0, 8px 8px;
+}
+
+/* Glassmorphism HUD Panel */
+.glass-panel {
+  background: linear-gradient(
+    145deg,
+    rgba(10, 22, 18, 0.72) 0%,
+    rgba(6, 13, 11, 0.84) 100%
+  );
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
