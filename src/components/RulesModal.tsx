@@ -17,7 +17,7 @@ export function RulesModal() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 backdrop-blur-sm p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4"
           onClick={() => setRulesOpen(false)}
         >
           <motion.div
@@ -26,30 +26,33 @@ export function RulesModal() {
             exit={{ opacity: 0, scale: 0.94, y: 12 }}
             transition={{ duration: 0.2 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-2xl max-h-[86dvh] flex flex-col rounded-3xl border border-white/15 bg-[#0c1412]/98 text-white shadow-2xl overflow-hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="rules-title"
+            className="w-full max-w-2xl max-h-[88dvh] sm:max-h-[86dvh] flex flex-col rounded-3xl border border-white/15 bg-[#0c1412]/98 text-white shadow-2xl overflow-hidden"
           >
-            <div className="shrink-0 flex items-center justify-between gap-3 px-5 pt-5 pb-3 border-b border-white/10">
-              <div className="flex items-center gap-2.5">
-                <span className="p-2 rounded-xl bg-amber-400/15 border border-amber-400/35 text-amber-300">
+            <div className="shrink-0 flex flex-wrap items-center justify-between gap-2 border-b border-white/10 px-4 pt-4 pb-3 sm:flex-nowrap sm:gap-3 sm:px-5 sm:pt-5">
+              <div className="flex min-w-0 basis-full items-center gap-2.5 sm:basis-auto sm:flex-1">
+                <span className="shrink-0 rounded-xl border border-amber-400/35 bg-amber-400/15 p-2 text-amber-300">
                   <BookOpen className="w-5 h-5" />
                 </span>
-                <h2 className="text-base sm:text-xl font-bold text-amber-200">
+                <h2 id="rules-title" className="min-w-0 text-base leading-snug font-bold text-amber-200 sm:text-xl">
                   {dict.rulesTitle}
                 </h2>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="ml-auto flex shrink-0 items-center gap-2">
                 <button
                   type="button"
                   onClick={toggleLanguage}
-                  className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-bold text-amber-200 hover:bg-white/10 transition"
+                  className="min-h-11 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-bold text-amber-100 hover:bg-white/10 transition"
                 >
                   {prefs.language === "en" ? "සිංහල" : "English"}
                 </button>
                 <button
                   type="button"
                   onClick={() => setRulesOpen(false)}
-                  className="rounded-full p-2 text-white/60 hover:bg-white/10 hover:text-white transition"
+                  className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-full p-2 text-white/75 hover:bg-white/10 hover:text-white transition"
                   aria-label={dict.close}
                 >
                   <X className="w-5 h-5" />
@@ -121,7 +124,7 @@ export function RulesModal() {
               <button
                 type="button"
                 onClick={() => setRulesOpen(false)}
-                className="w-full rounded-xl bg-amber-400 py-2.5 text-sm font-bold text-slate-950 hover:bg-amber-300 transition"
+                className="min-h-11 w-full rounded-xl bg-amber-400 py-2.5 text-sm font-bold text-slate-950 hover:bg-amber-300 transition"
               >
                 {dict.close}
               </button>

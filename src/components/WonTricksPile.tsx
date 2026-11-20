@@ -22,6 +22,7 @@ export const WonTricksPile = React.memo(function WonTricksPile({
 }: WonTricksPileProps) {
   const { prefs, dict } = useSettings();
   const [peeking, setPeeking] = useState(false);
+  const popoverId = React.useId();
 
   if (!tricks || tricks.length === 0) return null;
 
@@ -39,8 +40,7 @@ export const WonTricksPile = React.memo(function WonTricksPile({
     }
   };
 
-  // On mobile (<sm), center the peek card sheet cleanly in viewport so it NEVER clips off-screen;
-  // on desktop (sm+), anchor it smartly next to that player's won pile!
+  // Keep the pile sheet centered on mobile and anchor it beside the seat on wider screens.
   const popoverPosition =
     placement === "bottom"
       ? "fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 sm:absolute sm:top-auto sm:translate-y-0 sm:bottom-full sm:mb-2 sm:left-1/2 sm:-translate-x-1/2"
@@ -53,27 +53,28 @@ export const WonTricksPile = React.memo(function WonTricksPile({
   const visibleStacks = Math.min(tricks.length, 4);
 
   return (
-    <div
-      className="relative inline-flex items-center touch-none select-none z-25"
-      onPointerEnter={(e) => {
-        if (e.pointerType === "mouse") openPeek();
-      }}
-      onPointerLeave={() => closePeek()}
-      onPointerDown={(e) => {
-        e.preventDefault();
-        openPeek();
-      }}
-      onPointerUp={() => closePeek()}
-      onPointerCancel={() => closePeek()}
-      onContextMenu={(e) => e.preventDefault()}
-      title={dict.peekHint}
-    >
-      {/* Face-Down Stacked Trick Pile */}
-      <motion.div
-        whileHover={{ scale: 1.08 }}
-        whileTap={{ scale: 0.96 }}
-        className="relative flex items-center cursor-pointer group"
+    <div className="relative inline-flex items-center select-none z-25">
+      <button
+        type="button"
+        onClick={() => (peeking ? closePeek() : openPeek())}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            closePeek();
+          }
+        }}
+        aria-label={`${dict.peekHint} (${tricks.length})`}
+        aria-expanded={peeking}
+        aria-controls={popoverId}
+        title={dict.peekHint}
+        className="relative inline-flex min-h-11 min-w-11 items-center rounded-lg bg-transparent p-0 text-left touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#08120f]"
       >
+        {/* Face-Down Stacked Trick Pile */}
+        <motion.div
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.96 }}
+          className="relative flex items-center cursor-pointer group"
+        >
         <div className="relative w-8 h-10 sm:w-9 sm:h-11">
           {Array.from({ length: visibleStacks }).map((_, idx) => (
             <div
@@ -99,23 +100,34 @@ export const WonTricksPile = React.memo(function WonTricksPile({
           <Eye className="w-2.5 h-2.5" />
           <span>{tricks.length}</span>
         </span>
-      </motion.div>
+        </motion.div>
+      </button>
 
-      {/* Flipped Face-Up Cards Popover (ONLY visible while hovered / finger held down!) */}
       <AnimatePresence>
         {peeking ? (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: placement === "bottom" ? 6 : -6 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            transition={{ duration: 0.16 }}
-            className={`absolute ${popoverPosition} z-50 pointer-events-none rounded-2xl border border-amber-400/55 bg-[#07120e]/96 backdrop-blur-md p-2.5 shadow-2xl max-w-[82vw] sm:max-w-[340px]`}
-          >
+          <>
+            <button
+              type="button"
+              aria-label={dict.close}
+              tabIndex={-1}
+              onClick={closePeek}
+              className="fixed inset-0 z-40 cursor-default bg-black/20 sm:bg-transparent"
+            />
+            <motion.div
+              id={popoverId}
+              role="region"
+              aria-label={dict.wonCardsLabel(tricks.length)}
+              initial={{ opacity: 0, scale: 0.9, y: placement === "bottom" ? 6 : -6 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.16 }}
+              className={`absolute ${popoverPosition} z-50 rounded-2xl border border-amber-400/55 bg-[#07120e]/96 backdrop-blur-md p-2.5 shadow-2xl max-w-[82vw] sm:max-w-[340px]`}
+            >
             <div className="flex items-center justify-between gap-2 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-amber-300/90">
               <span>{dict.wonCardsLabel(tricks.length)}</span>
             </div>
 
-            <div className="flex flex-col gap-2 max-h-[45vh] overflow-hidden">
+              <div className="flex flex-col gap-2 max-h-[50dvh] sm:max-h-[45vh] overflow-y-auto overscroll-contain pr-1">
               {tricks.map((trickCards, tIdx) => (
                 <div
                   key={tIdx}
@@ -147,8 +159,9 @@ export const WonTricksPile = React.memo(function WonTricksPile({
                   </div>
                 </div>
               ))}
-            </div>
-          </motion.div>
+              </div>
+            </motion.div>
+          </>
         ) : null}
       </AnimatePresence>
     </div>

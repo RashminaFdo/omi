@@ -30,12 +30,14 @@ export default function HomePage() {
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorField, setErrorField] = useState<"nickname" | "room" | null>(null);
 
   const nameInput = draftName ?? prefs.nickname;
 
   const validateName = () => {
     const clean = nameInput.trim();
     if (!clean) {
+      setErrorField("nickname");
       setError(
         prefs.language === "si"
           ? "කරුණාකර ඔබේ නම ඇතුළත් කරන්න."
@@ -43,12 +45,14 @@ export default function HomePage() {
       );
       return null;
     }
+    setErrorField(null);
     setNickname(clean);
     return clean;
   };
 
   const handleCreateRoom = async () => {
     setError(null);
+    setErrorField(null);
     const cleanName = validateName();
     if (!cleanName || creating) return;
 
@@ -68,11 +72,13 @@ export default function HomePage() {
   const handleJoinRoom = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setErrorField(null);
     const cleanName = validateName();
     if (!cleanName || joining) return;
 
     const cleanCode = normalizeCode(joinCode);
     if (cleanCode.length !== 6) {
+      setErrorField("room");
       setError(dict.roomNotFound);
       return;
     }
@@ -82,6 +88,7 @@ export default function HomePage() {
       soundEngine.playClick();
       const exists = await checkRoomExists(cleanCode);
       if (!exists) {
+        setErrorField("room");
         setError(dict.roomNotFound);
         setJoining(false);
         return;
@@ -99,8 +106,8 @@ export default function HomePage() {
     <TableBackdrop>
       <TopBar />
 
-      <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 py-8 sm:py-12">
-        <div className="w-full max-w-2xl space-y-6">
+      <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 py-7 sm:py-12">
+        <div className="w-full max-w-2xl space-y-6 sm:space-y-7">
           {/* Hero Logo & Title */}
           <motion.div
             initial={{ opacity: 0, y: 14 }}
@@ -163,18 +170,22 @@ export default function HomePage() {
                 id="nickname"
                 type="text"
                 maxLength={20}
+                autoComplete="nickname"
                 value={nameInput}
                 onChange={(e) => {
                   setDraftName(e.target.value);
                   setError(null);
+                  setErrorField(null);
                 }}
                 placeholder={dict.nicknamePlaceholder}
-                className="w-full rounded-2xl border border-white/15 bg-black/40 px-4 py-3.5 text-base font-semibold text-white placeholder:text-white/35 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/25 transition"
+                aria-invalid={errorField === "nickname"}
+                aria-describedby={errorField === "nickname" && error ? "home-error" : undefined}
+                className="w-full rounded-2xl border border-white/20 bg-black/45 px-4 py-3.5 text-base font-semibold text-white placeholder:text-white/55 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/25 transition"
               />
             </div>
 
             {error ? (
-              <div className="rounded-xl border border-rose-400/40 bg-rose-500/15 px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-rose-200">
+              <div id="home-error" role="alert" className="rounded-xl border border-rose-400/40 bg-rose-500/15 px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-rose-100">
                 {error}
               </div>
             ) : null}
@@ -199,7 +210,8 @@ export default function HomePage() {
                   type="button"
                   disabled={creating || joining}
                   onClick={handleCreateRoom}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 hover:brightness-110 disabled:opacity-50 py-3 px-4 text-sm font-black text-slate-950 shadow-lg shadow-amber-500/20 transition"
+                  aria-busy={creating}
+                  className="min-h-11 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 hover:brightness-110 disabled:opacity-50 py-3 px-4 text-sm font-black text-slate-950 shadow-lg shadow-amber-500/20 transition"
                 >
                   <PlusCircle className="w-4 h-4" />
                   {creating ? dict.creating : dict.createRoom}
@@ -216,23 +228,34 @@ export default function HomePage() {
                     <KeyRound className="w-3.5 h-3.5" />
                     {dict.joinRoom}
                   </div>
+                  <label htmlFor="join-code" className="sr-only">
+                    {dict.roomCode}
+                  </label>
                   <input
+                    id="join-code"
                     type="text"
+                    inputMode="text"
+                    autoCapitalize="characters"
+                    autoComplete="off"
                     maxLength={6}
                     value={joinCode}
                     onChange={(e) => {
                       setJoinCode(normalizeCode(e.target.value));
                       setError(null);
+                      setErrorField(null);
                     }}
+                    aria-invalid={errorField === "room"}
+                    aria-describedby={errorField === "room" && error ? "home-error" : undefined}
                     placeholder={dict.roomCodePlaceholder}
-                    className="w-full rounded-xl border border-white/15 bg-black/45 px-3.5 py-2.5 text-center font-mono text-lg font-black tracking-[0.25em] text-amber-200 placeholder:text-white/25 placeholder:tracking-widest focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-400/25 transition uppercase"
+                    className="w-full rounded-xl border border-white/15 bg-black/45 px-3.5 py-2.5 text-center font-mono text-lg font-black tracking-[0.25em] text-amber-200 placeholder:text-white/55 placeholder:tracking-widest focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-400/25 transition uppercase"
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={joining || creating || joinCode.length < 6}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-400/45 bg-emerald-500/20 hover:bg-emerald-500/30 disabled:opacity-40 py-3 px-4 text-sm font-bold text-emerald-100 transition"
+                  aria-busy={joining}
+                  className="min-h-11 w-full inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-400/45 bg-emerald-500/20 hover:bg-emerald-500/30 disabled:opacity-40 py-3 px-4 text-sm font-bold text-emerald-100 transition"
                 >
                   {joining ? dict.joining : dict.enterTable}
                   <ArrowRight className="w-4 h-4" />
@@ -252,7 +275,7 @@ export default function HomePage() {
                   soundEngine.playClick();
                   setRulesOpen(true);
                 }}
-                className="inline-flex items-center gap-1 font-bold text-amber-300 hover:text-amber-200 transition"
+                className="min-h-11 inline-flex items-center justify-center gap-1 rounded-lg px-2 font-bold text-amber-300 hover:text-amber-200 transition"
               >
                 <BookOpen className="w-3.5 h-3.5" />
                 {dict.howToPlay}
