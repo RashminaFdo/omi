@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import {
   JetBrains_Mono,
   Noto_Sans_Sinhala,
@@ -23,7 +23,7 @@ const sinhala = Noto_Sans_Sinhala({
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
-  variable: "--font-mono",
+  variable: "--font-jetbrains-mono",
   weight: ["500", "700", "800"],
 });
 
@@ -50,6 +50,13 @@ export const metadata: Metadata = {
       "Play real-time 4-player Sri Lankan Omi online with friends.",
     images: ["/omi-logo.png"],
   },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#06130f",
 };
 
 export default function RootLayout({

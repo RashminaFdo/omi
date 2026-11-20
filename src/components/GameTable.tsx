@@ -444,6 +444,68 @@ export function GameTable({
     );
   };
 
+  const renderCompactSideBadge = (rel: 1 | 3) => {
+    const seat = seatAtRel(rel);
+    const player = room.seats[String(seat)];
+    if (!player) return null;
+
+    const team = getTeam(seat);
+    const isTurn =
+      (game.phase === "PLAYING" && game.currentTurn === seat) ||
+      (game.phase === "SELECT_TRUMP" && game.trumpCaller === seat);
+    const cardCount = game.hands[String(seat)]?.length ?? 0;
+    const isOfflineHuman = !player.isBot && !player.online;
+
+    return (
+      <div
+        key={seat}
+        title={player.name}
+        className={`flex min-w-0 flex-1 items-center gap-1 rounded-xl border px-2 py-1.5 ${
+          isTurn
+            ? "border-amber-400 bg-amber-400/20 shadow-[0_0_12px_rgba(251,191,36,0.25)]"
+            : isOfflineHuman
+            ? "border-rose-400/40 bg-rose-950/70"
+            : "border-white/15 bg-black/45"
+        }`}
+      >
+        <span
+          className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+            isOfflineHuman
+              ? "bg-rose-400"
+              : player.isBot
+              ? "bg-amber-300"
+              : "bg-emerald-400"
+          }`}
+        />
+        <span className="min-w-0 flex-1 truncate text-[10px] font-bold text-white">
+          {player.name}
+        </span>
+        <span
+          className={`shrink-0 rounded px-1 text-[9px] font-black ${
+            team === "A"
+              ? "bg-rose-500/25 text-rose-200"
+              : "bg-slate-500/40 text-slate-100"
+          }`}
+        >
+          {team}
+        </span>
+        <span className="shrink-0 rounded bg-white/10 px-1 text-[9px] font-bold tabular-nums text-white/80">
+          {cardCount}
+        </span>
+        {game.dealerSeat === seat ? (
+          <span className="shrink-0 text-[9px] font-black text-white/75" title={dict.dealer}>
+            D
+          </span>
+        ) : null}
+        {isTurn && remainingSeconds !== null ? (
+          <span className="shrink-0 rounded bg-amber-400 px-1 text-[9px] font-black tabular-nums text-slate-950">
+            {remainingSeconds}s
+          </span>
+        ) : null}
+      </div>
+    );
+  };
+
   const activePlayerName =
     room.seats[
       String(
@@ -472,7 +534,7 @@ export function GameTable({
   const myWonTricks = game.wonTricksBySeat?.[String(baseSeat)] ?? [];
 
   return (
-    <div className="relative flex-1 min-h-0 flex flex-col justify-between overflow-hidden px-1.5 sm:px-5 pt-1 pb-1.5 sm:pt-1.5 sm:pb-2 select-none">
+    <div className="relative flex-1 min-h-0 flex flex-col justify-between overflow-hidden px-1.5 sm:px-5 pt-1 pb-[max(0.375rem,env(safe-area-inset-bottom))] sm:pt-1.5 sm:pb-2 select-none">
       {/* Top HUD Row: Keta Tokens | Tricks | Trump Symbol Only */}
       <div className="mx-auto w-full max-w-6xl flex flex-wrap items-center justify-between gap-1.5 sm:gap-2 z-20">
         {/* Desktop full 20-token stack; Mobile compact score chip */}
@@ -576,12 +638,17 @@ export function GameTable({
         {/* Top Seat (Partner, rel 2) */}
         <div className="mb-1 sm:mb-2 z-20">{renderSeatBadge(2)}</div>
 
-        <div className="w-full max-w-5xl flex items-center justify-between gap-1 sm:gap-4 px-0.5 sm:px-2">
+        <div className="hidden w-full max-w-[300px] items-center justify-between gap-1 max-[380px]:flex">
+          {renderCompactSideBadge(3)}
+          {renderCompactSideBadge(1)}
+        </div>
+
+        <div className="w-full max-w-5xl flex items-center justify-between gap-1 px-0.5 sm:gap-4 sm:px-2 max-[380px]:max-w-none max-[380px]:flex-col max-[380px]:gap-1.5">
           {/* Left Seat (rel 3) */}
-          <div className="z-20 shrink-0">{renderSeatBadge(3)}</div>
+          <div className="z-20 hidden shrink-0 min-[381px]:block">{renderSeatBadge(3)}</div>
 
           {/* Center Trick Mat */}
-          <div className="relative flex-1 max-w-[235px] xs:max-w-[280px] sm:max-w-[440px] min-h-[135px] sm:min-h-[210px] rounded-[30px] sm:rounded-[48px] border border-amber-300/25 bg-black/20 shadow-[inset_0_0_36px_rgba(0,0,0,0.45)] flex items-center justify-center px-1.5 sm:px-2 py-1.5 sm:py-2">
+          <div className="relative min-w-0 flex-1 max-w-[235px] xs:max-w-[280px] sm:max-w-[440px] min-h-[135px] sm:min-h-[210px] rounded-[26px] sm:rounded-[48px] border border-amber-300/30 bg-black/25 shadow-[inset_0_0_36px_rgba(0,0,0,0.45)] flex items-center justify-center px-1.5 sm:px-2 py-1.5 sm:py-2 max-[380px]:w-full max-[380px]:max-w-none">
             {/* Subtle Center Crest Watermark */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -665,7 +732,7 @@ export function GameTable({
                       </div>
 
                       {/* Option A: Choose Trump Suit from first 4 cards */}
-                      <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+                      <div className="grid grid-cols-2 min-[420px]:grid-cols-4 gap-1.5 sm:gap-2">
                         {SUITS.map((suit) => {
                           const red = isRedSuit(suit);
                           return (
@@ -676,7 +743,7 @@ export function GameTable({
                               whileHover={{ y: -3, scale: 1.04 }}
                               whileTap={{ scale: 0.94 }}
                               onClick={() => handleSelectTrump(suit)}
-                              className="flex flex-col items-center justify-center gap-0.5 rounded-xl sm:rounded-2xl bg-white hover:bg-amber-50 py-1.5 sm:py-2 px-1 shadow-lg border-2 border-transparent hover:border-amber-400 transition"
+                              className="min-h-11 min-w-0 flex flex-col items-center justify-center gap-0.5 rounded-xl sm:rounded-2xl bg-white hover:bg-amber-50 py-1.5 sm:py-2 px-1 shadow-lg border-2 border-transparent hover:border-amber-400 transition disabled:opacity-50"
                             >
                               <SuitIcon
                                 suit={suit}
@@ -701,7 +768,7 @@ export function GameTable({
                         <p className="text-[10px] sm:text-[11px] font-semibold text-amber-200/85 mb-1.5">
                           {dict.orPickBlindCard}
                         </p>
-                        <div className="flex items-center justify-center gap-1.5 sm:gap-3">
+                        <div className="grid grid-cols-2 min-[420px]:grid-cols-4 gap-1.5 sm:gap-3">
                           {BLIND_POSITIONS.map((pos) => (
                             <motion.button
                               key={pos}
@@ -710,7 +777,7 @@ export function GameTable({
                               whileHover={{ y: -5, scale: 1.06 }}
                               whileTap={{ scale: 0.94 }}
                               onClick={() => handleSelectBlindTrump(pos)}
-                              className="group flex flex-col items-center gap-1 focus:outline-none"
+                              className="group min-h-11 min-w-0 flex flex-col items-center justify-center gap-1 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#08120f] disabled:opacity-50"
                             >
                               <CardBack
                                 design={prefs.cardBack}
@@ -808,7 +875,7 @@ export function GameTable({
           </div>
 
           {/* Right Seat (rel 1 — Next Anti-Clockwise!) */}
-          <div className="z-20 shrink-0">{renderSeatBadge(1)}</div>
+          <div className="z-20 hidden shrink-0 min-[381px]:block">{renderSeatBadge(1)}</div>
         </div>
       </div>
 
@@ -845,14 +912,14 @@ export function GameTable({
                     initial={{ opacity: 0, y: 10, scale: 0.92 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 10, scale: 0.92 }}
-                    className="absolute bottom-10 right-0 w-44 sm:w-52 rounded-2xl border border-white/15 bg-[#0c1412]/96 p-1.5 shadow-2xl grid grid-cols-1 gap-1"
+                    className="fixed bottom-[calc(9.25rem+env(safe-area-inset-bottom))] left-1/2 w-52 max-w-[calc(100vw-1.5rem)] -translate-x-1/2 rounded-2xl border border-white/15 bg-[#0c1412]/96 p-1.5 shadow-2xl grid grid-cols-1 gap-1 sm:absolute sm:bottom-[calc(100%+0.5rem)] sm:left-auto sm:right-0 sm:translate-x-0"
                   >
                     {EMOTE_KEYS.map((key) => (
                       <button
                         key={key}
                         type="button"
                         onClick={() => handleEmote(key)}
-                        className="flex items-center gap-2 rounded-xl px-2.5 py-1.5 sm:py-2 text-left text-xs font-semibold text-white/90 hover:bg-amber-400/20 hover:text-amber-200 transition"
+                        className="min-h-11 flex items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs font-semibold text-white/90 hover:bg-amber-400/20 hover:text-amber-100 transition"
                       >
                         <span>{dict.emotes[key].emoji}</span>
                         <span>{dict.emotes[key].label}</span>
@@ -868,7 +935,7 @@ export function GameTable({
                   setEmoteOpen((v) => !v);
                   soundEngine.playClick();
                 }}
-                className="rounded-full border border-amber-400/40 bg-black/60 hover:bg-amber-400/20 p-1.5 sm:p-2 text-amber-300 shadow-lg backdrop-blur-md transition"
+                className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-full border border-amber-400/40 bg-black/60 hover:bg-amber-400/20 p-2 text-amber-200 shadow-lg backdrop-blur-md transition"
                 aria-label="Emotes"
                 title="Emotes"
               >
@@ -879,8 +946,8 @@ export function GameTable({
         </div>
 
         {/* Fanned Hand — Super Mobile Friendly, zero dimming/hints */}
-        <div className="relative w-full flex items-end justify-center pt-1.5 pb-1 min-h-[92px] sm:min-h-[132px]">
-          <div className="flex items-end justify-center -space-x-4 xs:-space-x-3.5 sm:-space-x-4 md:-space-x-3 px-1 max-w-full">
+        <div className="relative w-full flex items-end justify-center pt-1.5 pb-1 min-h-[84px] sm:min-h-[132px]">
+          <div className="flex items-end justify-center -space-x-4 px-1 max-w-full">
             <AnimatePresence initial={false}>
               {myHand.map((card, index) => {
                 const count = myHand.length;
@@ -1106,18 +1173,18 @@ export function GameTable({
               </div>
 
               {/* Sticky Footer Action Buttons — ALWAYS reachable without scrolling! */}
-              <div className="shrink-0 border-t border-white/10 bg-[#08100d] p-3.5 sm:p-4">
+              <div className="shrink-0 border-t border-white/10 bg-[#08100d] p-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] sm:p-4">
                 {isHost ? (
                   game.phase === "GAME_OVER" ? (
                     <div className="space-y-2">
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 min-[380px]:grid-cols-2 gap-2">
                         <button
                           type="button"
                           onClick={() => {
                             soundEngine.playClick();
                             returnRoomToLobby(room.code);
                           }}
-                          className="rounded-xl border border-white/15 bg-white/[0.07] hover:bg-white/15 py-2.5 text-xs sm:text-sm font-bold text-white transition"
+                          className="min-h-11 rounded-xl border border-white/15 bg-white/[0.07] hover:bg-white/15 py-2.5 text-xs sm:text-sm font-bold text-white transition"
                         >
                           {dict.backToLobby}
                         </button>
@@ -1127,7 +1194,7 @@ export function GameTable({
                             soundEngine.playCardDeal();
                             startMatch(room.code);
                           }}
-                          className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 py-2.5 text-xs sm:text-sm font-black text-slate-950 transition"
+                          className="min-h-11 inline-flex items-center justify-center gap-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 py-2.5 text-xs sm:text-sm font-black text-slate-950 transition"
                         >
                           <RotateCcw className="w-4 h-4" />
                           {dict.playAgain}
@@ -1136,7 +1203,7 @@ export function GameTable({
                       <button
                         type="button"
                         onClick={handleCloseFinishedRoom}
-                        className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl border border-rose-400/35 bg-rose-500/15 hover:bg-rose-500/25 py-2 text-xs font-bold text-rose-200 transition"
+                        className="min-h-11 w-full inline-flex items-center justify-center gap-1.5 rounded-xl border border-rose-400/35 bg-rose-500/15 hover:bg-rose-500/25 py-2 text-xs font-bold text-rose-100 transition"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                         {dict.closeRoom}
@@ -1149,7 +1216,7 @@ export function GameTable({
                         soundEngine.playCardDeal();
                         dealNextHand(room.code);
                       }}
-                      className="w-full rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 hover:brightness-110 py-3 text-sm sm:text-base font-black text-slate-950 shadow-xl shadow-amber-500/20 transition"
+                      className="min-h-12 w-full rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 hover:brightness-110 py-3 text-sm sm:text-base font-black text-slate-950 shadow-xl shadow-amber-500/20 transition"
                     >
                       {dict.nextHand}
                     </button>

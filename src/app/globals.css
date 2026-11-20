@@ -1,16 +1,64 @@
 @import "tailwindcss";
 
 @theme inline {
+  --breakpoint-xs: 30rem;
   --font-sans: var(--font-jakarta), var(--font-sinhala), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-mono), ui-monospace, SFMono-Regular, monospace;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, monospace;
+}
+
+:root {
+  color-scheme: dark;
+  background: #06130f;
+  color: #f8fafc;
+  font-family: var(--font-jakarta), var(--font-sinhala), system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  text-size-adjust: 100%;
 }
 
 html,
 body {
+  min-height: 100%;
+  width: 100%;
+  overflow-x: clip;
   background-color: #06130f;
   color: #f8fafc;
-  font-family: var(--font-jakarta), var(--font-sinhala), system-ui, sans-serif;
-  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  min-height: 100dvh;
+  margin: 0;
+  overscroll-behavior-x: none;
+}
+
+button,
+a,
+[role="button"] {
+  touch-action: manipulation;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #facc15;
+  outline-offset: 3px;
+}
+
+input[type="text"],
+input[type="search"] {
+  min-height: 48px;
+  font-size: max(16px, 1em);
+}
+
+::selection {
+  color: #06130f;
+  background: #facc15;
+}
+
+* {
+  scrollbar-color: rgba(251, 191, 36, 0.35) rgba(255, 255, 255, 0.04);
+  scrollbar-width: thin;
 }
 
 /* Casino Felt Themes */
@@ -34,13 +82,23 @@ body {
   background-position: 0 0, 8px 8px;
 }
 
-/* Glassmorphism HUD Panel */
 .glass-panel {
   background: linear-gradient(
     145deg,
-    rgba(10, 22, 18, 0.72) 0%,
-    rgba(6, 13, 11, 0.84) 100%
+    rgba(10, 22, 18, 0.86) 0%,
+    rgba(6, 13, 11, 0.92) 100%
   );
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

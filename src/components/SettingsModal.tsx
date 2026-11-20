@@ -53,7 +53,7 @@ export function SettingsModal() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 backdrop-blur-sm p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4"
           onClick={() => setSettingsOpen(false)}
         >
           <motion.div
@@ -62,16 +62,19 @@ export function SettingsModal() {
             exit={{ opacity: 0, scale: 0.94, y: 12 }}
             transition={{ duration: 0.2 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md max-h-[86dvh] flex flex-col rounded-3xl border border-white/15 bg-[#0c1412]/98 text-white shadow-2xl overflow-hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settings-title"
+            className="w-full max-w-md max-h-[88dvh] sm:max-h-[86dvh] flex flex-col rounded-3xl border border-white/15 bg-[#0c1412]/98 text-white shadow-2xl overflow-hidden"
           >
             <div className="shrink-0 flex items-center justify-between px-5 pt-5 pb-3 border-b border-white/10">
-              <h2 className="text-lg sm:text-xl font-bold tracking-tight text-amber-200">
+              <h2 id="settings-title" className="text-lg sm:text-xl font-bold tracking-tight text-amber-200">
                 {dict.settingsTitle}
               </h2>
               <button
                 type="button"
                 onClick={() => setSettingsOpen(false)}
-                className="rounded-full p-2 text-white/60 hover:bg-white/10 hover:text-white transition"
+                className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-full p-2 text-white/75 hover:bg-white/10 hover:text-white transition"
                 aria-label={dict.close}
               >
                 <X className="w-5 h-5" />
@@ -94,7 +97,8 @@ export function SettingsModal() {
                         setLanguage(lang);
                         soundEngine.playClick();
                       }}
-                      className={`rounded-xl py-2.5 px-3 text-sm font-semibold border transition ${
+                      aria-pressed={prefs.language === lang}
+                      className={`min-h-11 rounded-xl py-2.5 px-3 text-sm font-semibold border transition ${
                         prefs.language === lang
                           ? "bg-amber-400/20 border-amber-400 text-amber-200 shadow-[0_0_16px_rgba(251,191,36,0.2)]"
                           : "bg-white/5 border-white/10 text-white/70 hover:bg-white/10"
@@ -127,15 +131,22 @@ export function SettingsModal() {
                         soundEngine.playClick();
                       }
                     }}
-                    className={`relative w-12 h-6 rounded-full transition-colors ${
-                      prefs.soundEnabled ? "bg-emerald-500" : "bg-white/20"
-                    }`}
+                    role="switch"
+                    aria-checked={prefs.soundEnabled}
+                    aria-label={dict.soundEffects}
+                    className="inline-flex min-h-11 min-w-14 items-center justify-center rounded-xl"
                   >
                     <span
-                      className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                        prefs.soundEnabled ? "translate-x-6" : "translate-x-0"
+                      className={`relative block h-6 w-12 rounded-full transition-colors ${
+                        prefs.soundEnabled ? "bg-emerald-500" : "bg-white/20"
                       }`}
-                    />
+                    >
+                      <span
+                        className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                          prefs.soundEnabled ? "translate-x-6" : "translate-x-0"
+                        }`}
+                      />
+                    </span>
                   </button>
                 </div>
 
@@ -155,7 +166,8 @@ export function SettingsModal() {
                     onChange={(e) => setVolume(Number(e.target.value) / 100)}
                     onMouseUp={() => soundEngine.playCardSlap(false)}
                     onTouchEnd={() => soundEngine.playCardSlap(false)}
-                    className="w-full accent-amber-400 cursor-pointer disabled:opacity-40"
+                    aria-label={dict.masterVolume}
+                    className="h-11 w-full accent-amber-400 cursor-pointer disabled:opacity-40"
                   />
                 </div>
               </div>
@@ -175,7 +187,8 @@ export function SettingsModal() {
                         setAnimationSpeed(spd);
                         soundEngine.playClick();
                       }}
-                      className={`rounded-xl py-2.5 px-3 text-sm font-semibold border transition ${
+                      aria-pressed={prefs.animationSpeed === spd}
+                      className={`min-h-11 rounded-xl py-2.5 px-3 text-sm font-semibold border transition ${
                         prefs.animationSpeed === spd
                           ? "bg-amber-400/20 border-amber-400 text-amber-200"
                           : "bg-white/5 border-white/10 text-white/70 hover:bg-white/10"
@@ -202,7 +215,8 @@ export function SettingsModal() {
                         setFeltTheme(t.id);
                         soundEngine.playClick();
                       }}
-                      className={`flex flex-col items-center gap-2 rounded-2xl p-2.5 border transition ${
+                      aria-pressed={prefs.feltTheme === t.id}
+                      className={`min-h-11 flex flex-col items-center gap-2 rounded-2xl p-2.5 border transition ${
                         prefs.feltTheme === t.id
                           ? "border-amber-400 bg-amber-400/15"
                           : "border-white/10 bg-white/[0.03] hover:bg-white/[0.08]"
@@ -234,7 +248,8 @@ export function SettingsModal() {
                         setCardBack(b.id);
                         soundEngine.playClick();
                       }}
-                      className={`flex flex-col items-center gap-2 rounded-2xl p-2.5 border transition ${
+                      aria-pressed={prefs.cardBack === b.id}
+                      className={`min-h-11 flex flex-col items-center gap-2 rounded-2xl p-2.5 border transition ${
                         prefs.cardBack === b.id
                           ? "border-amber-400 bg-amber-400/15"
                           : "border-white/10 bg-white/[0.03] hover:bg-white/[0.08]"
@@ -254,7 +269,7 @@ export function SettingsModal() {
               <button
                 type="button"
                 onClick={() => setSettingsOpen(false)}
-                className="w-full rounded-xl bg-amber-400 py-2.5 text-sm font-bold text-slate-950 hover:bg-amber-300 transition"
+                className="min-h-11 w-full rounded-xl bg-amber-400 py-2.5 text-sm font-bold text-slate-950 hover:bg-amber-300 transition"
               >
                 {dict.close}
               </button>

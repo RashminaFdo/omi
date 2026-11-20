@@ -382,10 +382,8 @@ export default function RoomPage({
     router.push("/");
   };
 
-  const isPlayingView = Boolean(room?.game && room.status !== "lobby");
-
   return (
-    <TableBackdrop lockViewport={isPlayingView}>
+    <TableBackdrop lockViewport>
       <TopBar roomCode={code} onLeave={handleLeave} />
 
       {!roomLoaded ? (
@@ -436,6 +434,9 @@ export default function RoomPage({
             onSubmit={handleConfirmInviteName}
             initial={{ opacity: 0, scale: 0.94, y: 12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="invite-name-title"
             className="w-full max-w-sm rounded-3xl border border-amber-400/40 bg-[#0b1512]/95 p-6 text-center text-white shadow-2xl space-y-4"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -445,7 +446,7 @@ export default function RoomPage({
               className="w-16 h-16 mx-auto object-contain"
             />
             <div>
-              <h2 className="text-xl font-black text-amber-200">
+              <h2 id="invite-name-title" className="text-xl font-black text-amber-200">
                 {dict.welcomeToRoom(room.code)}
               </h2>
               <p className="text-xs text-white/65 mt-1">
@@ -453,8 +454,10 @@ export default function RoomPage({
               </p>
             </div>
             <input
+              id="invite-name"
               type="text"
               autoFocus
+              aria-label={dict.nicknameLabel}
               maxLength={20}
               value={tempName}
               onChange={(e) => setTempName(e.target.value)}

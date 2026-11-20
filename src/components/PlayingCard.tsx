@@ -22,7 +22,7 @@ const SIZE_CLASSES: Record<NonNullable<PlayingCardProps["size"]>, string> = {
   xs: "w-9 h-[52px] sm:w-11 sm:h-16 rounded-md",
   sm: "w-11 h-[64px] sm:w-16 sm:h-24 rounded-lg",
   md: "w-[56px] h-[82px] sm:w-[80px] sm:h-[116px] rounded-xl",
-  lg: "w-[56px] h-[82px] sm:w-[86px] sm:h-[124px] rounded-xl",
+  lg: "w-12 h-[70px] min-[380px]:w-[56px] min-[380px]:h-[82px] sm:w-[86px] sm:h-[124px] rounded-xl",
 };
 
 function SuitIcon({
@@ -88,7 +88,8 @@ export const PlayingCard = React.memo(function PlayingCard({
       onClick={isInteractive && isLegal ? onClick : undefined}
       whileHover={isInteractive && isLegal ? { y: -14, scale: 1.05 } : undefined}
       whileTap={isInteractive && isLegal ? { scale: 0.97 } : undefined}
-      className={`relative select-none text-left transition-shadow duration-200 ${SIZE_CLASSES[size]} ${
+      aria-pressed={isInteractive ? selected : undefined}
+      className={`relative select-none text-left touch-manipulation transition-shadow duration-200 ${SIZE_CLASSES[size]} ${
         disabledState
           ? "opacity-45 brightness-75 saturate-50 cursor-not-allowed"
           : isInteractive
