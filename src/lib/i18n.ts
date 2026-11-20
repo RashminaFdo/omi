@@ -21,6 +21,7 @@ export interface I18nDict {
   linkCopied: string;
   copyCode: string;
   codeCopied: string;
+  copyFailed: string;
   shareWhatsApp: string;
   whatsAppMessage: (code: string, url: string) => string;
   roomLobby: string;
@@ -166,6 +167,7 @@ const en: I18nDict = {
   linkCopied: "Invite Link Copied!",
   copyCode: "Copy Code",
   codeCopied: "Copied!",
+  copyFailed: "Could not copy. Please try again or copy the text manually.",
   shareWhatsApp: "WhatsApp",
   whatsAppMessage: (code, url) =>
     `Join my Omi game! 🃏\nRoom Code: ${code}\nPlay here: ${url}`,
@@ -359,6 +361,7 @@ const si: I18nDict = {
   linkCopied: "ලින්ක් එක කොපි වුණා!",
   copyCode: "කේතය කොපි කරන්න",
   codeCopied: "කොපි වුණා!",
+  copyFailed: "කොපි කරන්න බැරි වුණා. නැවත උත්සාහ කරන්න හෝ අතින් කොපි කරන්න.",
   shareWhatsApp: "WhatsApp",
   whatsAppMessage: (code, url) =>
     `එන්න ඕමි අතක් ගහමු! 🃏\nකාමර කේතය: ${code}\nමෙතැනින් එන්න: ${url}`,

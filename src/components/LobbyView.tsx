@@ -59,6 +59,7 @@ export function LobbyView({
   const { prefs, dict } = useSettings();
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
   const [starting, setStarting] = useState(false);
   const [busySeat, setBusySeat] = useState<SeatIndex | null>(null);
   const [shuffling, setShuffling] = useState(false);
@@ -81,25 +82,68 @@ export function LobbyView({
       ? `${window.location.origin}/room/${room.code}`
       : `/room/${room.code}`;
 
-  const handleCopyLink = async () => {
+  const copyText = async (text: string) => {
+    if (navigator.clipboard?.writeText) {
+      let clipboardTimer: number | undefined;
+      const clipboardResult = await Promise.race([
+        navigator.clipboard.writeText(text).then(
+          () => true,
+          () => false
+        ),
+        new Promise<boolean>((resolve) => {
+          clipboardTimer = window.setTimeout(() => resolve(false), 700);
+        }),
+      ]);
+      if (clipboardTimer !== undefined) {
+        window.clearTimeout(clipboardTimer);
+      }
+      if (clipboardResult) return;
+    }
+
+    const input = document.createElement("textarea");
+    input.value = text;
+    input.readOnly = true;
+    input.style.position = "fixed";
+    input.style.opacity = "0";
+    input.style.pointerEvents = "none";
+    input.style.left = "-9999px";
+    document.body.appendChild(input);
+    input.focus();
+    input.select();
+    input.setSelectionRange(0, input.value.length);
+
     try {
-      await navigator.clipboard.writeText(inviteUrl);
+      if (!document.execCommand("copy")) {
+        throw new Error("Clipboard copy failed.");
+      }
+    } finally {
+      input.remove();
+    }
+  };
+
+  const handleCopyLink = async () => {
+    setCopyFailed(false);
+    try {
+      await copyText(inviteUrl);
       setCopiedLink(true);
       soundEngine.playClick();
       setTimeout(() => setCopiedLink(false), 2200);
     } catch {
-      // fallback
+      setCopiedLink(false);
+      setCopyFailed(true);
     }
   };
 
   const handleCopyCode = async () => {
+    setCopyFailed(false);
     try {
-      await navigator.clipboard.writeText(room.code);
+      await copyText(room.code);
       setCopiedCode(true);
       soundEngine.playClick();
       setTimeout(() => setCopiedCode(false), 2000);
     } catch {
-      // fallback
+      setCopiedCode(false);
+      setCopyFailed(true);
     }
   };
 
@@ -441,9 +485,9 @@ export function LobbyView({
       <div className="mx-auto max-w-5xl space-y-4 sm:space-y-5">
         {/* Invite Banner */}
         <div className="glass-panel rounded-3xl border border-white/15 p-4 sm:p-5 shadow-2xl">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div className="flex items-center gap-3.5">
-              <div className="rounded-2xl bg-amber-400/15 border border-amber-400/40 px-4 py-2.5 text-center">
+          <div className="flex flex-col min-[420px]:flex-row min-[420px]:items-center min-[420px]:justify-between gap-4">
+            <div className="flex flex-col min-[420px]:flex-row min-[420px]:items-center gap-3.5">
+              <div className="w-fit rounded-2xl bg-amber-400/15 border border-amber-400/40 px-4 py-2.5 text-center">
                 <div className="text-[10px] font-semibold uppercase tracking-widest text-amber-200/75">
                   {dict.roomCode}
                 </div>
@@ -455,11 +499,14 @@ export function LobbyView({
                 <h1 className="text-lg sm:text-xl font-extrabold text-white">
                   {dict.roomLobby}
                 </h1>
-                <p className="text-xs sm:text-sm text-white/65 flex items-center gap-1.5 mt-0.5">
+                <p className="text-xs sm:text-sm text-white/65 flex items-center gap-1.5 mt-0.5 flex-wrap">
                   <Users className="w-3.5 h-3.5 text-amber-300" />
                   <span>{filledCount} / 4</span>
                   <span className="text-white/35">•</span>
-                  <span>
+                  <span className="min-[420px]:hidden">
+                    {dict.teamA} vs {dict.teamB}
+                  </span>
+                  <span className="hidden min-[420px]:inline">
                     {dict.teamA} ({dict.redTokens}) vs {dict.teamB} (
                     {dict.blackTokens})
                   </span>
@@ -504,6 +551,11 @@ export function LobbyView({
                 {dict.shareWhatsApp}
               </button>
             </div>
+            {copyFailed ? (
+              <p role="alert" className="text-center text-xs font-semibold text-rose-200">
+                {dict.copyFailed}
+              </p>
+            ) : null}
           </div>
         </div>
 

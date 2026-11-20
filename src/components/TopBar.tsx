@@ -16,12 +16,12 @@ export function TopBar({ roomCode, onLeave }: TopBarProps) {
     useSettings();
 
   return (
-    <header className="relative z-30 min-h-14 shrink-0 flex items-center justify-between gap-2 px-3 sm:px-5 py-1.5 sm:py-2.5 border-b border-white/10 bg-black/45 pt-[max(0.375rem,env(safe-area-inset-top))] backdrop-blur-md">
+    <header className="relative z-30 min-h-14 shrink-0 flex items-center justify-between gap-1 px-2 sm:gap-2 sm:px-5 py-1.5 sm:py-2.5 border-b border-white/10 bg-black/45 pt-[max(0.375rem,env(safe-area-inset-top))] backdrop-blur-md">
       {/* Left: Brand */}
-      <div className="flex items-center gap-2.5 min-w-0">
+      <div className="flex min-w-0 items-center gap-1 sm:gap-2.5">
         <Link
           href="/"
-          className="min-h-11 min-w-11 inline-flex items-center gap-2 rounded-lg group shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+          className="min-h-10 min-w-10 w-10 inline-flex items-center gap-2 rounded-lg group shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 sm:min-h-11 sm:min-w-11 sm:w-auto"
           onClick={() => soundEngine.playClick()}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -41,11 +41,11 @@ export function TopBar({ roomCode, onLeave }: TopBarProps) {
         </Link>
 
         {roomCode ? (
-          <div className="flex items-center gap-1.5 rounded-full bg-white/[0.07] border border-amber-400/30 px-2.5 py-1 text-xs">
+          <div className="flex min-w-0 shrink items-center gap-1 rounded-full bg-white/[0.07] border border-amber-400/30 px-1.5 py-1 text-[10px] xs:gap-1.5 xs:px-2.5 xs:text-xs">
             <span className="text-white/55 hidden xs:inline">
               {dict.roomCode}:
             </span>
-            <span className="font-mono font-extrabold tracking-widest text-amber-300">
+            <span className="min-w-0 font-mono text-[10px] font-extrabold tracking-[0.1em] text-amber-300 xs:text-xs xs:tracking-widest">
               {roomCode}
             </span>
           </div>
@@ -53,7 +53,7 @@ export function TopBar({ roomCode, onLeave }: TopBarProps) {
       </div>
 
       {/* Right: Controls */}
-      <div className="flex items-center gap-1.5 sm:gap-2">
+      <div className="flex shrink-0 items-center gap-0.5 sm:gap-2">
         {/* Instant Language Switcher */}
         <button
           type="button"
@@ -61,11 +61,12 @@ export function TopBar({ roomCode, onLeave }: TopBarProps) {
             toggleLanguage();
             soundEngine.playClick();
           }}
-          className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-full border border-amber-400/35 bg-amber-400/10 hover:bg-amber-400/20 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-amber-100 transition"
+          className="min-h-10 min-w-10 inline-flex items-center justify-center rounded-full border border-amber-400/35 bg-amber-400/10 hover:bg-amber-400/20 px-1 sm:min-h-11 sm:min-w-11 sm:px-3 py-1.5 text-xs font-bold text-amber-100 transition"
           aria-label="Switch language"
           title="Switch English / සිංහල"
         >
-          {prefs.language === "en" ? "සිංහල" : "EN"}
+          <span className="min-[361px]:hidden">{prefs.language === "en" ? "සි" : "EN"}</span>
+          <span className="hidden min-[361px]:inline">{prefs.language === "en" ? "සිංහල" : "EN"}</span>
         </button>
 
         {/* How to Play */}
@@ -75,7 +76,7 @@ export function TopBar({ roomCode, onLeave }: TopBarProps) {
             setRulesOpen(true);
             soundEngine.playClick();
           }}
-          className="min-h-11 min-w-11 inline-flex items-center justify-center gap-1.5 rounded-full border border-white/15 bg-white/[0.06] hover:bg-white/15 px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-white transition"
+          className="min-h-10 min-w-10 inline-flex items-center justify-center gap-1.5 rounded-full border border-white/15 bg-white/[0.06] hover:bg-white/15 px-1 sm:min-h-11 sm:min-w-11 sm:px-3 py-1.5 text-xs font-semibold text-white transition"
           aria-label={dict.howToPlay}
           title={dict.howToPlay}
         >
@@ -90,7 +91,7 @@ export function TopBar({ roomCode, onLeave }: TopBarProps) {
             setSettingsOpen(true);
             soundEngine.playClick();
           }}
-          className="min-h-11 min-w-11 inline-flex items-center justify-center gap-1.5 rounded-full border border-white/15 bg-white/[0.06] hover:bg-white/15 px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-white transition"
+          className="min-h-10 min-w-10 inline-flex items-center justify-center gap-1.5 rounded-full border border-white/15 bg-white/[0.06] hover:bg-white/15 px-1 sm:min-h-11 sm:min-w-11 sm:px-3 py-1.5 text-xs font-semibold text-white transition"
           aria-label={dict.settings}
           title={dict.settings}
         >
@@ -105,7 +106,8 @@ export function TopBar({ roomCode, onLeave }: TopBarProps) {
               soundEngine.playClick();
               onLeave();
             }}
-            className="min-h-11 min-w-11 inline-flex items-center justify-center gap-1 rounded-full border border-rose-400/30 bg-rose-500/15 hover:bg-rose-500/25 px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-rose-100 transition"
+            className="min-h-10 min-w-10 inline-flex items-center justify-center gap-1 rounded-full border border-rose-400/30 bg-rose-500/15 hover:bg-rose-500/25 px-1 sm:min-h-11 sm:min-w-11 sm:px-3 py-1.5 text-xs font-semibold text-rose-100 transition"
+            aria-label={dict.leaveRoom}
             title={dict.leaveRoom}
           >
             <LogOut className="w-3.5 h-3.5" />

@@ -444,6 +444,68 @@ export function GameTable({
     );
   };
 
+  const renderCompactSideBadge = (rel: 1 | 3) => {
+    const seat = seatAtRel(rel);
+    const player = room.seats[String(seat)];
+    if (!player) return null;
+
+    const team = getTeam(seat);
+    const isTurn =
+      (game.phase === "PLAYING" && game.currentTurn === seat) ||
+      (game.phase === "SELECT_TRUMP" && game.trumpCaller === seat);
+    const cardCount = game.hands[String(seat)]?.length ?? 0;
+    const isOfflineHuman = !player.isBot && !player.online;
+
+    return (
+      <div
+        key={seat}
+        title={player.name}
+        className={`flex min-w-0 flex-1 items-center gap-1 rounded-xl border px-2 py-1.5 ${
+          isTurn
+            ? "border-amber-400 bg-amber-400/20 shadow-[0_0_12px_rgba(251,191,36,0.25)]"
+            : isOfflineHuman
+            ? "border-rose-400/40 bg-rose-950/70"
+            : "border-white/15 bg-black/45"
+        }`}
+      >
+        <span
+          className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+            isOfflineHuman
+              ? "bg-rose-400"
+              : player.isBot
+              ? "bg-amber-300"
+              : "bg-emerald-400"
+          }`}
+        />
+        <span className="min-w-0 flex-1 truncate text-[10px] font-bold text-white">
+          {player.name}
+        </span>
+        <span
+          className={`shrink-0 rounded px-1 text-[9px] font-black ${
+            team === "A"
+              ? "bg-rose-500/25 text-rose-200"
+              : "bg-slate-500/40 text-slate-100"
+          }`}
+        >
+          {team}
+        </span>
+        <span className="shrink-0 rounded bg-white/10 px-1 text-[9px] font-bold tabular-nums text-white/80">
+          {cardCount}
+        </span>
+        {game.dealerSeat === seat ? (
+          <span className="shrink-0 text-[9px] font-black text-white/75" title={dict.dealer}>
+            D
+          </span>
+        ) : null}
+        {isTurn && remainingSeconds !== null ? (
+          <span className="shrink-0 rounded bg-amber-400 px-1 text-[9px] font-black tabular-nums text-slate-950">
+            {remainingSeconds}s
+          </span>
+        ) : null}
+      </div>
+    );
+  };
+
   const activePlayerName =
     room.seats[
       String(
@@ -576,12 +638,17 @@ export function GameTable({
         {/* Top Seat (Partner, rel 2) */}
         <div className="mb-1 sm:mb-2 z-20">{renderSeatBadge(2)}</div>
 
-        <div className="w-full max-w-5xl flex items-center justify-between gap-1 sm:gap-4 px-0.5 sm:px-2">
+        <div className="hidden w-full max-w-[300px] items-center justify-between gap-1 max-[380px]:flex">
+          {renderCompactSideBadge(3)}
+          {renderCompactSideBadge(1)}
+        </div>
+
+        <div className="w-full max-w-5xl flex items-center justify-between gap-1 px-0.5 sm:gap-4 sm:px-2 max-[380px]:max-w-none max-[380px]:flex-col max-[380px]:gap-1.5">
           {/* Left Seat (rel 3) */}
-          <div className="z-20 shrink-0">{renderSeatBadge(3)}</div>
+          <div className="z-20 hidden shrink-0 min-[381px]:block">{renderSeatBadge(3)}</div>
 
           {/* Center Trick Mat */}
-          <div className="relative min-w-0 flex-1 max-w-[235px] xs:max-w-[280px] sm:max-w-[440px] min-h-[135px] sm:min-h-[210px] rounded-[26px] sm:rounded-[48px] border border-amber-300/30 bg-black/25 shadow-[inset_0_0_36px_rgba(0,0,0,0.45)] flex items-center justify-center px-1.5 sm:px-2 py-1.5 sm:py-2">
+          <div className="relative min-w-0 flex-1 max-w-[235px] xs:max-w-[280px] sm:max-w-[440px] min-h-[135px] sm:min-h-[210px] rounded-[26px] sm:rounded-[48px] border border-amber-300/30 bg-black/25 shadow-[inset_0_0_36px_rgba(0,0,0,0.45)] flex items-center justify-center px-1.5 sm:px-2 py-1.5 sm:py-2 max-[380px]:w-full max-[380px]:max-w-none">
             {/* Subtle Center Crest Watermark */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -808,7 +875,7 @@ export function GameTable({
           </div>
 
           {/* Right Seat (rel 1 — Next Anti-Clockwise!) */}
-          <div className="z-20 shrink-0">{renderSeatBadge(1)}</div>
+          <div className="z-20 hidden shrink-0 min-[381px]:block">{renderSeatBadge(1)}</div>
         </div>
       </div>
 
@@ -845,7 +912,7 @@ export function GameTable({
                     initial={{ opacity: 0, y: 10, scale: 0.92 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 10, scale: 0.92 }}
-                    className="absolute bottom-[calc(100%+0.5rem)] right-0 w-52 max-w-[calc(100vw-2rem)] rounded-2xl border border-white/15 bg-[#0c1412]/96 p-1.5 shadow-2xl grid grid-cols-1 gap-1"
+                    className="fixed bottom-[calc(9.25rem+env(safe-area-inset-bottom))] left-1/2 w-52 max-w-[calc(100vw-1.5rem)] -translate-x-1/2 rounded-2xl border border-white/15 bg-[#0c1412]/96 p-1.5 shadow-2xl grid grid-cols-1 gap-1 sm:absolute sm:bottom-[calc(100%+0.5rem)] sm:left-auto sm:right-0 sm:translate-x-0"
                   >
                     {EMOTE_KEYS.map((key) => (
                       <button
@@ -1110,7 +1177,7 @@ export function GameTable({
                 {isHost ? (
                   game.phase === "GAME_OVER" ? (
                     <div className="space-y-2">
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 min-[380px]:grid-cols-2 gap-2">
                         <button
                           type="button"
                           onClick={() => {
