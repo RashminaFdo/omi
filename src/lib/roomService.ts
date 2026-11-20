@@ -38,7 +38,7 @@ const BOT_NAMES = ["Kasun", "Nimali", "Ruwan", "Tharushi", "Dilshan", "Chathuri"
 const DEVICE_ID_KEY = "omi_device_id_v1";
 
 export const OFFLINE_TAKEOVER_MS = 15_000; // 15 seconds before AI bot subs in
-export const FINISHED_ROOM_TTL_MS = 180_000; // 3 minutes auto-cleanup after match ends
+export const FINISHED_ROOM_TTL_MS = 45_000; // 45s after match ends, auto-delete room if no rematch started
 
 /**
  * Returns a persistent unique Machine / Device ID stored in localStorage.
@@ -454,15 +454,8 @@ export async function leaveLobbySeat(
 
     const anyOnlineHuman = remainingHumans.some((p) => p?.online);
 
-    if (
-      (room.status === "lobby" || room.status === "finished") &&
-      remainingHumans.length === 0
-    ) {
-      shouldDelete = true;
-      return null; // Deletes room node atomically!
-    }
-
-    if (room.status === "finished" && !anyOnlineHuman) {
+    // Delete the entire room node whenever no online human players remain (abandoned, quit, or finished!)
+    if (remainingHumans.length === 0 || !anyOnlineHuman) {
       shouldDelete = true;
       return null;
     }
@@ -473,6 +466,25 @@ export async function leaveLobbySeat(
 
   if (shouldDelete) {
     await deleteRoom(code).catch(() => {});
+  }
+}
+
+/**
+ * Registers or cancels server-side Firebase onDisconnect deletion of the ENTIRE room node
+ * when this client is the sole online human remaining.
+ * Guarantees that even if everyone closes their browser tab without clicking Leave,
+ * Firebase automatically removes `/rooms/${code}` so the database never fills up!
+ */
+export function syncSoloRoomDisconnectCleanup(
+  code: string,
+  isSoleOnlineHuman: boolean
+): void {
+  const db = getFirebaseDb();
+  const roomRef = ref(db, `rooms/${code}`);
+  if (isSoleOnlineHuman) {
+    onDisconnect(roomRef).remove().catch(() => {});
+  } else {
+    onDisconnect(roomRef).cancel().catch(() => {});
   }
 }
 

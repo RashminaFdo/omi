@@ -31,6 +31,7 @@ import {
   submitCardPlay,
   submitTrumpChoice,
   subscribeToRoom,
+  syncSoloRoomDisconnectCleanup,
 } from "@/lib/roomService";
 import { useSettings } from "@/lib/settings";
 import { soundEngine } from "@/lib/sound";
@@ -148,6 +149,28 @@ export default function RoomPage({
     if (!roomCodePresent || mySeat === null) return;
     return attachPresence(code, mySeat);
   }, [code, roomCodePresent, mySeat]);
+
+  // 3b. Auto-delete entire room on server disconnect if this player is the sole online human!
+  const onlineHumanCount = room
+    ? ([0, 1, 2, 3] as SeatIndex[]).filter((s) => {
+        const p = room.seats[String(s)];
+        return p && !p.isBot && p.online;
+      }).length
+    : 0;
+  const isSoleOnlineHuman = Boolean(
+    roomCodePresent && mySeat !== null && onlineHumanCount <= 1
+  );
+
+  useEffect(() => {
+    if (!roomCodePresent || mySeat === null) return;
+    syncSoloRoomDisconnectCleanup(code, isSoleOnlineHuman);
+    return () => {
+      // Cancel room-level onDisconnect if cleanly unmounting without solo abandon
+      if (!isSoleOnlineHuman) {
+        syncSoloRoomDisconnectCleanup(code, false);
+      }
+    };
+  }, [code, roomCodePresent, mySeat, isSoleOnlineHuman]);
 
   // Play subtle audio cue when any other human player goes offline or reconnects
   const prevOnlineSigRef = useRef<string>("");

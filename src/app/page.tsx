@@ -282,6 +282,24 @@ export default function HomePage() {
               </button>
             </div>
           </motion.div>
+
+          {/* Clean SEO Attribution Footer */}
+          <footer className="text-center space-y-1.5 pt-1 pb-2 text-[11px] sm:text-xs text-white/45">
+            <p>
+              Omi (ඕමි) — Classic Sri Lankan 4-Player Card Game •{" "}
+              <a
+                href="https://rashmina.dev"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-amber-300/80 hover:text-amber-200 font-semibold transition"
+              >
+                Built by Rashmina Fernando
+              </a>
+            </p>
+            <p className="text-[10px] text-white/30">
+              Free online multiplayer Omi • Thurumpu, Kapothi, Basthe, Seporu &amp; Keta
+            </p>
+          </footer>
         </div>
       </main>
     </TableBackdrop>
