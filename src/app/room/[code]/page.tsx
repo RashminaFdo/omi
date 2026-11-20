@@ -382,10 +382,8 @@ export default function RoomPage({
     router.push("/");
   };
 
-  const isPlayingView = Boolean(room?.game && room.status !== "lobby");
-
   return (
-    <TableBackdrop lockViewport={isPlayingView}>
+    <TableBackdrop lockViewport>
       <TopBar roomCode={code} onLeave={handleLeave} />
 
       {!roomLoaded ? (

@@ -481,7 +481,7 @@ export function LobbyView({
   };
 
   return (
-    <div className="relative z-10 flex-1 overflow-y-auto overscroll-contain px-3 sm:px-6 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:py-5">
+    <div className="relative z-10 flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y px-3 sm:px-6 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:py-5">
       <div className="mx-auto max-w-5xl space-y-4 sm:space-y-5">
         {/* Invite Banner */}
         <div className="glass-panel rounded-3xl border border-white/15 p-4 sm:p-5 shadow-2xl">
