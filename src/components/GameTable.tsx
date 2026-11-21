@@ -143,8 +143,8 @@ export function GameTable({
   // Active meme playback (< 9 seconds fresh and not dismissed)
   const activeMeme =
     room.activeMeme &&
-    room.activeMeme.id !== dismissedMemeId &&
-    nowTs - room.activeMeme.timestamp < 9000
+      room.activeMeme.id !== dismissedMemeId &&
+      nowTs - room.activeMeme.timestamp < 9000
       ? room.activeMeme
       : null;
 
@@ -169,7 +169,7 @@ export function GameTable({
           // If mobile browser blocked unmuted autoplay, play muted and show 1-tap unmute pill
           vid.muted = true;
           setMemeMutedFallback(true);
-          vid.play().catch(() => {});
+          vid.play().catch(() => { });
         });
     }
   }, [activeMemeId, prefs.soundEnabled, prefs.volume]);
@@ -267,9 +267,9 @@ export function GameTable({
   const remainingSeconds =
     timerSeconds > 0
       ? Math.max(
-          0,
-          Math.ceil(timerSeconds - (nowTs - game.turnStartedAt) / 1000)
-        )
+        0,
+        Math.ceil(timerSeconds - (nowTs - game.turnStartedAt) / 1000)
+      )
       : null;
 
   const isMatchPoint = game.scores.A >= 8 || game.scores.B >= 8;
@@ -341,7 +341,7 @@ export function GameTable({
 
   const handleCloseFinishedRoom = async () => {
     soundEngine.playClick();
-    await deleteRoom(room.code).catch(() => {});
+    await deleteRoom(room.code).catch(() => { });
     onRoomClosed();
   };
 
@@ -384,11 +384,11 @@ export function GameTable({
     const offlineSecsLeft =
       isOfflineHuman && !player.botTakeover && player.disconnectedAt
         ? Math.max(
-            0,
-            Math.ceil(
-              (OFFLINE_TAKEOVER_MS - (nowTs - player.disconnectedAt)) / 1000
-            )
+          0,
+          Math.ceil(
+            (OFFLINE_TAKEOVER_MS - (nowTs - player.disconnectedAt)) / 1000
           )
+        )
         : null;
 
     const placement: "bottom" | "top" | "left" | "right" =
@@ -416,20 +416,18 @@ export function GameTable({
 
         {/* Player Pill (always intact & fixed position around table rim) */}
         <div
-          className={`relative flex items-center gap-1.5 sm:gap-2 rounded-2xl px-2 sm:px-3 py-1 sm:py-1.5 border backdrop-blur-md transition-all ${
-            isOfflineHuman
-              ? "bg-rose-950/75 border-rose-400/60"
-              : isTurn
+          className={`relative flex items-center gap-1.5 sm:gap-2 rounded-2xl px-2 sm:px-3 py-1 sm:py-1.5 border backdrop-blur-md transition-all ${isOfflineHuman
+            ? "bg-rose-950/75 border-rose-400/60"
+            : isTurn
               ? "bg-amber-400/20 border-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.45)] scale-[1.03]"
               : "bg-black/50 border-white/15"
-          }`}
+            }`}
         >
           <span
-            className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full shrink-0 ${
-              team === "A"
-                ? "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)]"
-                : "bg-slate-200 ring-1 ring-slate-500"
-            }`}
+            className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full shrink-0 ${team === "A"
+              ? "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)]"
+              : "bg-slate-200 ring-1 ring-slate-500"
+              }`}
           />
 
           <div className="leading-tight min-w-0">
@@ -479,11 +477,10 @@ export function GameTable({
 
           {isTurn && remainingSeconds !== null ? (
             <span
-              className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[9px] sm:text-[10px] font-black tabular-nums ${
-                remainingSeconds <= 5
-                  ? "bg-rose-500 text-white animate-pulse"
-                  : "bg-amber-400 text-slate-950"
-              }`}
+              className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[9px] sm:text-[10px] font-black tabular-nums ${remainingSeconds <= 5
+                ? "bg-rose-500 text-white animate-pulse"
+                : "bg-amber-400 text-slate-950"
+                }`}
             >
               {remainingSeconds}s
             </span>
@@ -493,9 +490,8 @@ export function GameTable({
         {/* Opponent / Partner Mini Card Backs + Won Tricks Pile directly below pill */}
         {rel !== 0 ? (
           <div
-            className={`flex items-center justify-center gap-1.5 ${
-              isSideSeat ? "flex-col sm:flex-row" : "flex-row"
-            }`}
+            className={`flex items-center justify-center gap-1.5 ${isSideSeat ? "flex-col sm:flex-row" : "flex-row"
+              }`}
           >
             {cardCount > 0 ? (
               <div className="flex items-center justify-center -space-x-5 sm:-space-x-4">
@@ -560,6 +556,16 @@ export function GameTable({
 
   const myWonTricks = game.wonTricksBySeat?.[String(baseSeat)] ?? [];
 
+  // Position the playing meme video directly next to the player who sent it!
+  const activeMemePositionClass = useMemo(() => {
+    if (!activeMeme) return "";
+    const rel = (((activeMeme.seat - baseSeat + 4) % 4) as 0 | 1 | 2 | 3);
+    if (rel === 0) return "bottom-14 sm:bottom-16 left-2 sm:left-4";
+    if (rel === 1) return "right-2 sm:right-6 top-[46%] -translate-y-1/2";
+    if (rel === 2) return "top-14 sm:top-16 left-1/2 -translate-x-1/2";
+    return "left-2 sm:left-6 top-[46%] -translate-y-1/2";
+  }, [activeMeme, baseSeat]);
+
   return (
     <div className="relative flex-1 min-h-0 flex flex-col justify-between overflow-hidden px-1.5 sm:px-4 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] select-none">
       {/* Top HUD Row: Keta Tokens | Tricks | Symbol-Only Trump Card */}
@@ -617,11 +623,10 @@ export function GameTable({
             {game.trumpSuit ? (
               <>
                 <span
-                  className={`w-7 h-9 sm:w-9 sm:h-11 rounded-lg bg-gradient-to-br from-white to-[#efeae0] border border-amber-400/75 flex items-center justify-center shadow ${
-                    isRedSuit(game.trumpSuit)
-                      ? "text-[#c81e32]"
-                      : "text-[#171c28]"
-                  }`}
+                  className={`w-7 h-9 sm:w-9 sm:h-11 rounded-lg bg-gradient-to-br from-white to-[#efeae0] border border-amber-400/75 flex items-center justify-center shadow ${isRedSuit(game.trumpSuit)
+                    ? "text-[#c81e32]"
+                    : "text-[#171c28]"
+                    }`}
                 >
                   <SuitIcon
                     suit={game.trumpSuit}
@@ -691,53 +696,53 @@ export function GameTable({
         <div className="pointer-events-none absolute left-1/2 top-[46%] -translate-x-1/2 -translate-y-1/2 z-20 flex items-center justify-center">
           <AnimatePresence>
             {game.phase !== "SELECT_TRUMP" &&
-            game.phase !== "REVEAL_TRUMP_CARD"
+              game.phase !== "REVEAL_TRUMP_CARD"
               ? game.currentTrick.map((play) => {
-                  const rel = relOfSeat(play.seat);
-                  const pos = TRICK_CARD_OFFSET[rel];
-                  const isWinningCard =
-                    game.phase === "TRICK_COMPLETE" &&
-                    game.lastTrickWinningCardId === play.card.id;
+                const rel = relOfSeat(play.seat);
+                const pos = TRICK_CARD_OFFSET[rel];
+                const isWinningCard =
+                  game.phase === "TRICK_COMPLETE" &&
+                  game.lastTrickWinningCardId === play.card.id;
 
-                  return (
-                    <motion.div
-                      key={play.card.id}
-                      initial={{
-                        opacity: 0,
-                        x: pos.enterX,
-                        y: pos.enterY,
-                        scale: 0.72,
-                      }}
-                      animate={{
-                        opacity: 1,
-                        x: pos.x,
-                        y: pos.y,
-                        scale: isWinningCard ? 1.08 : 1,
-                      }}
-                      exit={{
-                        opacity: 0,
-                        x: trickWinnerExit.x,
-                        y: trickWinnerExit.y,
-                        scale: 0.45,
-                        transition: { duration: animDuration * 0.85 },
-                      }}
-                      transition={{
-                        type: "spring",
-                        stiffness: fast ? 420 : 280,
-                        damping: fast ? 28 : 24,
-                      }}
-                      className="absolute"
-                    >
-                      <PlayingCard
-                        card={play.card}
-                        size="sm"
-                        isTrump={play.card.suit === game.trumpSuit}
-                        isWinning={isWinningCard}
-                        isCut={Boolean(play.isCut)}
-                      />
-                    </motion.div>
-                  );
-                })
+                return (
+                  <motion.div
+                    key={play.card.id}
+                    initial={{
+                      opacity: 0,
+                      x: pos.enterX,
+                      y: pos.enterY,
+                      scale: 0.72,
+                    }}
+                    animate={{
+                      opacity: 1,
+                      x: pos.x,
+                      y: pos.y,
+                      scale: isWinningCard ? 1.08 : 1,
+                    }}
+                    exit={{
+                      opacity: 0,
+                      x: trickWinnerExit.x,
+                      y: trickWinnerExit.y,
+                      scale: 0.45,
+                      transition: { duration: animDuration * 0.85 },
+                    }}
+                    transition={{
+                      type: "spring",
+                      stiffness: fast ? 420 : 280,
+                      damping: fast ? 28 : 24,
+                    }}
+                    className="absolute"
+                  >
+                    <PlayingCard
+                      card={play.card}
+                      size="sm"
+                      isTrump={play.card.suit === game.trumpSuit}
+                      isWinning={isWinningCard}
+                      isCut={Boolean(play.isCut)}
+                    />
+                  </motion.div>
+                );
+              })
               : null}
           </AnimatePresence>
         </div>
@@ -796,14 +801,12 @@ export function GameTable({
                         >
                           <SuitIcon
                             suit={suit}
-                            className={`w-5 h-5 sm:w-6 sm:h-6 ${
-                              red ? "text-[#c81e32]" : "text-[#171c28]"
-                            }`}
+                            className={`w-5 h-5 sm:w-6 sm:h-6 ${red ? "text-[#c81e32]" : "text-[#171c28]"
+                              }`}
                           />
                           <span
-                            className={`text-[9px] sm:text-[11px] font-extrabold ${
-                              red ? "text-[#c81e32]" : "text-[#171c28]"
-                            }`}
+                            className={`text-[9px] sm:text-[11px] font-extrabold ${red ? "text-[#c81e32]" : "text-[#171c28]"
+                              }`}
                           >
                             {dict.suits[suit]}
                           </span>
@@ -858,8 +861,8 @@ export function GameTable({
         {/* FLOATING BLIND TRUMP CARD REVEAL (Fixed center overlay) */}
         <AnimatePresence>
           {game.phase === "REVEAL_TRUMP_CARD" &&
-          game.revealedTrumpCard &&
-          game.revealedTrumpCardPosition ? (
+            game.revealedTrumpCard &&
+            game.revealedTrumpCardPosition ? (
             <motion.div
               initial={{ opacity: 0, scale: 0.88 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -900,15 +903,15 @@ export function GameTable({
           ) : null}
         </AnimatePresence>
 
-        {/* FLOATING PRELOADED MEME VIDEO PLAYER (Zero-lag local blob playback with sound!) */}
+        {/* FLOATING PRELOADED MEME VIDEO PLAYER (Anchored next to the player who sent it!) */}
         <AnimatePresence>
           {activeMeme && activeMemeItem ? (
             <motion.div
               key={activeMeme.id}
-              initial={{ opacity: 0, scale: 0.85, y: -12 }}
+              initial={{ opacity: 0, scale: 0.85, y: 8 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.85, y: -12 }}
-              className="absolute top-14 sm:top-16 left-1/2 -translate-x-1/2 z-40 w-[210px] sm:w-[260px] rounded-2xl border-2 border-amber-400/70 bg-black/95 shadow-2xl overflow-hidden"
+              exit={{ opacity: 0, scale: 0.85, y: 8 }}
+              className={`absolute ${activeMemePositionClass} z-40 w-[195px] sm:w-[240px] rounded-2xl border-2 border-amber-400/75 bg-black/95 shadow-2xl overflow-hidden`}
             >
               <div className="flex items-center justify-between gap-1.5 px-2.5 py-1 bg-black/80 text-[10px] sm:text-[11px] font-bold text-amber-200">
                 <span className="truncate">
@@ -974,11 +977,10 @@ export function GameTable({
         {game.phase === "PLAYING" ? (
           <div className="absolute left-1/2 -translate-x-1/2 bottom-2.5 sm:bottom-3.5 z-20 hidden xs:block">
             <div
-              className={`rounded-full px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs font-bold border backdrop-blur-md whitespace-nowrap ${
-                isMyPlayTurn
-                  ? "bg-amber-400/20 border-amber-400 text-amber-200 shadow-[0_0_16px_rgba(251,191,36,0.3)]"
-                  : "bg-black/50 border-white/15 text-white/80"
-              }`}
+              className={`rounded-full px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs font-bold border backdrop-blur-md whitespace-nowrap ${isMyPlayTurn
+                ? "bg-amber-400/20 border-amber-400 text-amber-200 shadow-[0_0_16px_rgba(251,191,36,0.3)]"
+                : "bg-black/50 border-white/15 text-white/80"
+                }`}
             >
               {isMyPlayTurn ? dict.yourTurn : dict.playersTurn(activePlayerName)}
             </div>
@@ -1004,11 +1006,10 @@ export function GameTable({
                         setChatTab("emotes");
                         soundEngine.playClick();
                       }}
-                      className={`inline-flex items-center justify-center gap-1 rounded-lg py-1.5 text-[11px] font-bold transition ${
-                        chatTab === "emotes"
-                          ? "bg-amber-400 text-slate-950"
-                          : "text-white/75 hover:text-white"
-                      }`}
+                      className={`inline-flex items-center justify-center gap-1 rounded-lg py-1.5 text-[11px] font-bold transition ${chatTab === "emotes"
+                        ? "bg-amber-400 text-slate-950"
+                        : "text-white/75 hover:text-white"
+                        }`}
                     >
                       <MessageSquareHeart className="w-3.5 h-3.5" />
                       {dict.chatTabEmotes}
@@ -1019,11 +1020,10 @@ export function GameTable({
                         setChatTab("memes");
                         soundEngine.playClick();
                       }}
-                      className={`inline-flex items-center justify-center gap-1 rounded-lg py-1.5 text-[11px] font-bold transition ${
-                        chatTab === "memes"
-                          ? "bg-amber-400 text-slate-950"
-                          : "text-white/75 hover:text-white"
-                      }`}
+                      className={`inline-flex items-center justify-center gap-1 rounded-lg py-1.5 text-[11px] font-bold transition ${chatTab === "memes"
+                        ? "bg-amber-400 text-slate-950"
+                        : "text-white/75 hover:text-white"
+                        }`}
                     >
                       <Film className="w-3.5 h-3.5" />
                       {dict.chatTabMemes}
@@ -1031,7 +1031,7 @@ export function GameTable({
                   </div>
 
                   {chatTab === "emotes" ? (
-                    <div className="grid grid-cols-1 gap-1">
+                    <div className="max-h-52 overflow-y-auto overscroll-contain pr-1 grid grid-cols-1 gap-1">
                       {EMOTE_KEYS.map((key) => (
                         <button
                           key={key}
@@ -1045,7 +1045,7 @@ export function GameTable({
                       ))}
                     </div>
                   ) : (
-                    <div className="space-y-1">
+                    <div className="max-h-52 overflow-y-auto overscroll-contain pr-1 space-y-1">
                       {memeCooldownSec > 0 ? (
                         <div className="rounded-lg bg-amber-500/20 border border-amber-400/40 px-2.5 py-1.5 text-center text-[11px] font-bold text-amber-200">
                           ⏱️ {dict.memeCooldownNotice(memeCooldownSec)}
@@ -1075,13 +1075,13 @@ export function GameTable({
                 setChatOpen((v) => !v);
                 soundEngine.playClick();
               }}
-              className="inline-flex items-center gap-1 rounded-full border border-amber-400/45 bg-black/65 hover:bg-amber-400/20 px-2.5 py-1.5 sm:p-2 text-amber-300 shadow-lg backdrop-blur-md transition"
-              aria-label="Chat & Memes"
-              title="Chat & Memes"
+              className="inline-flex items-center gap-1 rounded-full border border-amber-400/45 bg-black/65 hover:bg-amber-400/20 px-2.5 py-1.5 sm:px-3 sm:py-2 text-amber-300 shadow-lg backdrop-blur-md transition"
+              aria-label={dict.chatTabEmotes}
+              title={dict.chatTabEmotes}
             >
               <MessageSquareHeart className="w-4 h-4" />
-              <span className="text-[10px] font-bold hidden sm:inline">
-                {dict.chatTabMemes}
+              <span className="text-[10px] sm:text-xs font-bold">
+                {dict.chatTabEmotes}
               </span>
             </button>
           </div>
@@ -1133,7 +1133,7 @@ export function GameTable({
       {/* Hand Summary & Match Victory Overlay — z-50 above TopBar, scrollable body + always-visible sticky CTA footer! */}
       <AnimatePresence>
         {(game.phase === "HAND_SUMMARY" || game.phase === "GAME_OVER") &&
-        game.lastHandResult ? (
+          game.lastHandResult ? (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -1149,11 +1149,10 @@ export function GameTable({
               {/* Scrollable Content Body */}
               <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-5 space-y-3">
                 <div
-                  className={`mx-auto w-11 h-11 sm:w-12 sm:h-12 rounded-2xl border flex items-center justify-center ${
-                    game.lastHandResult.outcomeType === "REVOKE"
-                      ? "bg-rose-500/20 border-rose-400/60 text-rose-300"
-                      : "bg-amber-400/15 border-amber-400/45 text-amber-300"
-                  }`}
+                  className={`mx-auto w-11 h-11 sm:w-12 sm:h-12 rounded-2xl border flex items-center justify-center ${game.lastHandResult.outcomeType === "REVOKE"
+                    ? "bg-rose-500/20 border-rose-400/60 text-rose-300"
+                    : "bg-amber-400/15 border-amber-400/45 text-amber-300"
+                    }`}
                 >
                   {game.phase === "GAME_OVER" ? (
                     <Trophy className="w-6 h-6 sm:w-7 sm:h-7" />
