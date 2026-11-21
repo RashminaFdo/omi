@@ -13,8 +13,10 @@
     "@vercel/speed-insights": "^2.1.0",
     "firebase": "^13.4.0",
     "framer-motion": "^14.14.0",
+    "jsqr": "^1.4.0",
     "lucide-react": "^1.76.0",
     "next": "16.4.6",
+    "qrcode.react": "^4.2.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },

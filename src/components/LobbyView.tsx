@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
+import { QRCodeSVG } from "qrcode.react";
 import {
   ArrowLeftRight,
   Bot,
@@ -11,6 +12,7 @@ import {
   GripVertical,
   Link2,
   Play,
+  QrCode,
   Share2,
   Shuffle,
   Timer,
@@ -61,6 +63,7 @@ export function LobbyView({
   const [copiedCode, setCopiedCode] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
   const [waMenuOpen, setWaMenuOpen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
   const [starting, setStarting] = useState(false);
   const [busySeat, setBusySeat] = useState<SeatIndex | null>(null);
   const [shuffling, setShuffling] = useState(false);
@@ -550,7 +553,7 @@ export function LobbyView({
             </div>
 
             {/* Share Buttons */}
-            <div className="grid grid-cols-1 min-[440px]:grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <button
                 type="button"
                 onClick={handleCopyLink}
@@ -575,6 +578,19 @@ export function LobbyView({
                   <Copy className="w-4 h-4 text-amber-300" />
                 )}
                 {copiedCode ? dict.codeCopied : dict.copyCode}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  soundEngine.playClick();
+                  setWaMenuOpen(false);
+                  setQrOpen(true);
+                }}
+                className="min-h-11 w-full inline-flex items-center justify-center gap-1.5 rounded-xl border border-amber-400/40 bg-amber-400/15 hover:bg-amber-400/25 px-2.5 sm:px-3 py-2.5 text-xs sm:text-sm font-bold text-amber-200 transition"
+              >
+                <QrCode className="w-4 h-4" />
+                {dict.showQrCode}
               </button>
 
               <div className="relative">
@@ -812,6 +828,68 @@ export function LobbyView({
           </div>
         </div>
       </div>
+      {/* Host QR Code Invite Modal */}
+      <AnimatePresence>
+        {qrOpen ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+            onClick={() => setQrOpen(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: 12 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-xs rounded-3xl border border-amber-400/40 bg-[#0a1411]/98 p-6 text-center text-white shadow-2xl space-y-4"
+            >
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-extrabold text-amber-200 flex items-center gap-2">
+                  <QrCode className="w-4 h-4" />
+                  {dict.qrInviteTitle}
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setQrOpen(false)}
+                  className="rounded-full p-1.5 text-white/60 hover:bg-white/10 hover:text-white transition"
+                  aria-label={dict.close}
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="mx-auto inline-flex items-center justify-center rounded-2xl bg-white p-3.5 shadow-xl">
+                <QRCodeSVG
+                  value={inviteUrl}
+                  size={208}
+                  level="M"
+                  bgColor="#ffffff"
+                  fgColor="#06130f"
+                />
+              </div>
+
+              <div>
+                <div className="font-mono text-2xl font-black tracking-[0.22em] text-amber-300">
+                  {room.code}
+                </div>
+                <p className="text-xs text-white/65 mt-1">
+                  {dict.qrInviteSubtitle}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setQrOpen(false)}
+                className="w-full rounded-xl bg-amber-400 hover:bg-amber-300 py-2.5 text-sm font-bold text-slate-950 transition"
+              >
+                {dict.close}
+              </button>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

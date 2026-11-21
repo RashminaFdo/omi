@@ -26,6 +26,14 @@ export interface I18nDict {
   shareWhatsAppNormal: string;
   shareWhatsAppBusiness: string;
   shareOtherApps: string;
+  showQrCode: string;
+  scanQrCode: string;
+  qrInviteTitle: string;
+  qrInviteSubtitle: string;
+  qrScannerTitle: string;
+  qrScannerHint: string;
+  qrCameraError: string;
+  qrInvalidCode: string;
   whatsAppMessage: (code: string, url: string) => string;
   roomLobby: string;
   roomCode: string;
@@ -179,6 +187,14 @@ const en: I18nDict = {
   shareWhatsAppNormal: "WhatsApp (Normal)",
   shareWhatsAppBusiness: "WhatsApp Business",
   shareOtherApps: "More Apps...",
+  showQrCode: "QR Code",
+  scanQrCode: "Scan QR",
+  qrInviteTitle: "Scan to Join Room",
+  qrInviteSubtitle: "Friends can scan with the in-app QR scanner or phone camera.",
+  qrScannerTitle: "Scan Room QR Code",
+  qrScannerHint: "Point your camera at the host's QR code to auto-join.",
+  qrCameraError: "Camera access denied or unavailable. Please allow camera permission or enter the 6-letter code manually.",
+  qrInvalidCode: "That QR code doesn't look like a valid Omi room.",
   whatsAppMessage: (code, url) =>
     `Join my Omi game! 🃏\nRoom Code: ${code}\nPlay here: ${url}`,
   roomLobby: "Game Lobby",
@@ -388,6 +404,14 @@ const si: I18nDict = {
   shareWhatsAppNormal: "WhatsApp (සාමාන්‍ය)",
   shareWhatsAppBusiness: "WhatsApp Business",
   shareOtherApps: "වෙනත් ඇප්...",
+  showQrCode: "QR කේතය",
+  scanQrCode: "QR ස්කෑන්",
+  qrInviteTitle: "ස්කෑන් කරලා එක්වෙන්න",
+  qrInviteSubtitle: "ඇප් එකේ QR ස්කෑනරයෙන් හෝ ෆෝන් කැමරාවෙන් ස්කෑන් කරන්න.",
+  qrScannerTitle: "කාමර QR කේතය ස්කෑන් කරන්න",
+  qrScannerHint: "ප්‍රධානියාගේ QR කේතය වෙත කැමරාව යොමු කරන්න.",
+  qrCameraError: "කැමරාවට අවසර නැත හෝ කැමරාව සොයාගත නොහැක. කරුණාකර අවසර දෙන්න හෝ අක්ෂර 6 කේතය ටයිප් කරන්න.",
+  qrInvalidCode: "මෙය වලංගු ඕමි කාමර QR කේතයක් නොවේ.",
   whatsAppMessage: (code, url) =>
     `එන්න ඕමි අතක් ගහමු! 🃏\nකාමර කේතය: ${code}\nමෙතැනින් එන්න: ${url}`,
   roomLobby: "ඕමි කාමරය",

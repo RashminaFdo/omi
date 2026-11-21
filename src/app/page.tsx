@@ -8,9 +8,11 @@ import {
   BookOpen,
   KeyRound,
   PlusCircle,
+  QrCode,
   Sparkles,
   Users,
 } from "lucide-react";
+import { QrScannerModal } from "@/components/QrScannerModal";
 import { TableBackdrop } from "@/components/TableBackdrop";
 import { TopBar } from "@/components/TopBar";
 import {
@@ -29,6 +31,7 @@ export default function HomePage() {
   const [joinCode, setJoinCode] = useState("");
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorField, setErrorField] = useState<"nickname" | "room" | null>(null);
 
@@ -94,6 +97,36 @@ export default function HomePage() {
         return;
       }
       router.push(`/room/${cleanCode}`);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not connect to room."
+      );
+      setJoining(false);
+    }
+  };
+
+  const handleQrDetected = async (scannedCode: string) => {
+    setScannerOpen(false);
+    setError(null);
+    setErrorField(null);
+    setJoinCode(scannedCode);
+
+    // Save nickname if entered; if blank, /room/[code] shows the quick name prompt & auto-seats!
+    const cleanName = nameInput.trim();
+    if (cleanName) {
+      setNickname(cleanName);
+    }
+
+    setJoining(true);
+    try {
+      const exists = await checkRoomExists(scannedCode);
+      if (!exists) {
+        setError(dict.roomNotFound);
+        setErrorField("room");
+        setJoining(false);
+        return;
+      }
+      router.push(`/room/${scannedCode}`);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Could not connect to room."
@@ -251,15 +284,33 @@ export default function HomePage() {
                   />
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={joining || creating || joinCode.length < 6}
-                  aria-busy={joining}
-                  className="min-h-11 w-full inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-400/45 bg-emerald-500/20 hover:bg-emerald-500/30 disabled:opacity-40 py-3 px-4 text-sm font-bold text-emerald-100 transition"
-                >
-                  {joining ? dict.joining : dict.enterTable}
-                  <ArrowRight className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="submit"
+                    disabled={joining || creating || joinCode.length < 6}
+                    aria-busy={joining}
+                    className="min-h-11 flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-400/45 bg-emerald-500/20 hover:bg-emerald-500/30 disabled:opacity-40 py-3 px-3 text-sm font-bold text-emerald-100 transition"
+                  >
+                    {joining ? dict.joining : dict.enterTable}
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={joining || creating}
+                    onClick={() => {
+                      soundEngine.playClick();
+                      setError(null);
+                      setScannerOpen(true);
+                    }}
+                    title={dict.scanQrCode}
+                    aria-label={dict.scanQrCode}
+                    className="min-h-11 shrink-0 inline-flex items-center justify-center gap-1.5 rounded-xl border border-amber-400/45 bg-amber-400/15 hover:bg-amber-400/25 disabled:opacity-40 py-3 px-3 text-xs sm:text-sm font-bold text-amber-200 transition"
+                  >
+                    <QrCode className="w-4 h-4" />
+                    <span>{dict.scanQrCode}</span>
+                  </button>
+                </div>
               </form>
             </div>
 
@@ -302,6 +353,12 @@ export default function HomePage() {
           </footer>
         </div>
       </main>
+
+      <QrScannerModal
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onDetectedCode={handleQrDetected}
+      />
     </TableBackdrop>
   );
 }
