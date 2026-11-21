@@ -118,7 +118,15 @@ export type EmoteKey =
   | "seporu"
   | "wellPlayed"
   | "hurryUp"
-  | "goodGame";
+  | "goodGame"
+  | "trustMe"
+  | "noTrumps"
+  | "aceComing"
+  | "oops"
+  | "haha"
+  | "danger"
+  | "bigBrain"
+  | "rematch";
 
 export type MemeId =
   | "asiyath"

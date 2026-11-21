@@ -67,6 +67,14 @@ const EMOTE_KEYS: EmoteKey[] = [
   "wellPlayed",
   "hurryUp",
   "goodGame",
+  "trustMe",
+  "noTrumps",
+  "aceComing",
+  "oops",
+  "haha",
+  "danger",
+  "bigBrain",
+  "rematch",
 ];
 
 const BLIND_POSITIONS: BlindCardPosition[] = [5, 6, 7, 8];
