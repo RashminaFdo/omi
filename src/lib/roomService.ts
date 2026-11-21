@@ -25,6 +25,8 @@ import type {
   EmoteEvent,
   EmoteKey,
   GameState,
+  MemeEvent,
+  MemeId,
   RoomData,
   RoomSettings,
   SeatIndex,
@@ -192,6 +194,7 @@ export function normalizeRoomData(
     },
     game: normalizeGameState(raw.game),
     emotes: raw.emotes ?? {},
+    activeMeme: raw.activeMeme ?? null,
   };
 }
 
@@ -866,4 +869,22 @@ export async function sendTableEmote(
     timestamp: now,
   };
   await set(ref(db, `rooms/${code}/emotes/${seat}`), emote);
+}
+
+export async function sendTableMeme(
+  code: string,
+  seat: SeatIndex,
+  senderName: string,
+  memeId: MemeId
+): Promise<void> {
+  const db = getFirebaseDb();
+  const now = Date.now();
+  const meme: MemeEvent = {
+    id: `meme_${seat}_${now}`,
+    seat,
+    senderName,
+    memeId,
+    timestamp: now,
+  };
+  await set(ref(db, `rooms/${code}/activeMeme`), meme);
 }

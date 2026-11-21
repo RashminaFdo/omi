@@ -60,6 +60,7 @@ export function LobbyView({
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
+  const [waMenuOpen, setWaMenuOpen] = useState(false);
   const [starting, setStarting] = useState(false);
   const [busySeat, setBusySeat] = useState<SeatIndex | null>(null);
   const [shuffling, setShuffling] = useState(false);
@@ -147,14 +148,48 @@ export function LobbyView({
     }
   };
 
-  const handleWhatsAppShare = () => {
+  const shareToWhatsAppApp = (mode: "normal" | "business" | "native") => {
     soundEngine.playClick();
+    setWaMenuOpen(false);
     const msg = dict.whatsAppMessage(room.code, inviteUrl);
-    window.open(
-      `https://wa.me/?text=${encodeURIComponent(msg)}`,
-      "_blank",
-      "noopener,noreferrer"
-    );
+    const encoded = encodeURIComponent(msg);
+    const webFallback = `https://api.whatsapp.com/send?text=${encoded}`;
+
+    if (mode === "native" && typeof navigator !== "undefined" && navigator.share) {
+      navigator
+        .share({
+          title: `Omi Room ${room.code}`,
+          text: msg,
+          url: inviteUrl,
+        })
+        .catch(() => {});
+      return;
+    }
+
+    const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+    const isAndroid = /Android/i.test(ua);
+
+    if (isAndroid) {
+      // Target exact Android package: Normal WhatsApp (com.whatsapp) or WhatsApp Business (com.whatsapp.w4b)
+      // Automatically falls back to api.whatsapp.com (which opens whichever WhatsApp is installed)
+      const pkg = mode === "business" ? "com.whatsapp.w4b" : "com.whatsapp";
+      const intentUrl = `intent://send?text=${encoded}#Intent;scheme=whatsapp;package=${pkg};S.browser_fallback_url=${encodeURIComponent(
+        webFallback
+      )};end`;
+      window.location.href = intentUrl;
+      return;
+    }
+
+    if (mode === "normal") {
+      // On iOS/Desktop, whatsapp:// protocol prefers normal WhatsApp over Business web redirect
+      const isIOS = /iPhone|iPad|iPod/i.test(ua);
+      if (isIOS) {
+        window.location.href = `whatsapp://send?text=${encoded}`;
+        return;
+      }
+    }
+
+    window.open(webFallback, "_blank", "noopener,noreferrer");
   };
 
   const handleSeatClick = async (seat: SeatIndex) => {
@@ -542,14 +577,48 @@ export function LobbyView({
                 {copiedCode ? dict.codeCopied : dict.copyCode}
               </button>
 
-              <button
-                type="button"
-                onClick={handleWhatsAppShare}
-                className="min-h-11 w-full inline-flex items-center justify-center gap-1.5 rounded-xl border border-emerald-400/40 bg-emerald-500/20 hover:bg-emerald-500/30 px-2.5 sm:px-3 py-2.5 text-xs sm:text-sm font-bold text-emerald-100 transition"
-              >
-                <Share2 className="w-4 h-4" />
-                {dict.shareWhatsApp}
-              </button>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundEngine.playClick();
+                    setWaMenuOpen((v) => !v);
+                  }}
+                  aria-expanded={waMenuOpen}
+                  className="min-h-11 w-full inline-flex items-center justify-center gap-1.5 rounded-xl border border-emerald-400/40 bg-emerald-500/20 hover:bg-emerald-500/30 px-2.5 sm:px-3 py-2.5 text-xs sm:text-sm font-bold text-emerald-100 transition"
+                >
+                  <Share2 className="w-4 h-4" />
+                  {dict.shareWhatsApp}
+                </button>
+
+                {waMenuOpen ? (
+                  <div className="absolute right-0 mt-2 z-40 w-52 rounded-2xl border border-emerald-400/35 bg-[#091511]/98 p-1.5 shadow-2xl backdrop-blur-md space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => shareToWhatsAppApp("normal")}
+                      className="w-full text-left rounded-xl px-3 py-2 text-xs font-bold text-emerald-200 hover:bg-emerald-500/20 transition"
+                    >
+                      💬 {dict.shareWhatsAppNormal}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => shareToWhatsAppApp("business")}
+                      className="w-full text-left rounded-xl px-3 py-2 text-xs font-semibold text-white/85 hover:bg-white/10 transition"
+                    >
+                      💼 {dict.shareWhatsAppBusiness}
+                    </button>
+                    {typeof navigator !== "undefined" && "share" in navigator ? (
+                      <button
+                        type="button"
+                        onClick={() => shareToWhatsAppApp("native")}
+                        className="w-full text-left rounded-xl px-3 py-2 text-xs font-semibold text-amber-200 hover:bg-amber-400/15 transition border-t border-white/10"
+                      >
+                        📤 {dict.shareOtherApps}
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
             </div>
             {copyFailed ? (
               <p role="alert" className="text-center text-xs font-semibold text-rose-200">

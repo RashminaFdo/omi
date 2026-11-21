@@ -23,6 +23,9 @@ export interface I18nDict {
   codeCopied: string;
   copyFailed: string;
   shareWhatsApp: string;
+  shareWhatsAppNormal: string;
+  shareWhatsAppBusiness: string;
+  shareOtherApps: string;
   whatsAppMessage: (code: string, url: string) => string;
   roomLobby: string;
   roomCode: string;
@@ -131,7 +134,11 @@ export interface I18nDict {
   roomFull: string;
   spectatorNotice: string;
   backHome: string;
-  // Emotes
+  // Emotes & Memes
+  chatTabEmotes: string;
+  chatTabMemes: string;
+  memeCooldownNotice: (sec: number) => string;
+  memeSentBy: (name: string) => string;
   emotes: Record<EmoteKey, { label: string; emoji: string }>;
   // Suits & Ranks
   suits: Record<Suit, string>;
@@ -169,6 +176,9 @@ const en: I18nDict = {
   codeCopied: "Copied!",
   copyFailed: "Could not copy. Please try again or copy the text manually.",
   shareWhatsApp: "WhatsApp",
+  shareWhatsAppNormal: "WhatsApp (Normal)",
+  shareWhatsAppBusiness: "WhatsApp Business",
+  shareOtherApps: "More Apps...",
   whatsAppMessage: (code, url) =>
     `Join my Omi game! 🃏\nRoom Code: ${code}\nPlay here: ${url}`,
   roomLobby: "Game Lobby",
@@ -273,6 +283,10 @@ const en: I18nDict = {
   roomFull: "All 4 seats are currently taken.",
   spectatorNotice: "Watching as Spectator",
   backHome: "Back to Home",
+  chatTabEmotes: "Quick Chat",
+  chatTabMemes: "Memes",
+  memeCooldownNotice: (sec) => `Cooldown: wait ${sec}s`,
+  memeSentBy: (name) => `${name} sent a meme`,
   emotes: {
     niceCut: { label: "Nice cut!", emoji: "✂️" },
     kapothiIncoming: { label: "Sweep incoming!", emoji: "🔥" },
@@ -363,6 +377,9 @@ const si: I18nDict = {
   codeCopied: "කොපි වුණා!",
   copyFailed: "කොපි කරන්න බැරි වුණා. නැවත උත්සාහ කරන්න හෝ අතින් කොපි කරන්න.",
   shareWhatsApp: "WhatsApp",
+  shareWhatsAppNormal: "WhatsApp (සාමාන්‍ය)",
+  shareWhatsAppBusiness: "WhatsApp Business",
+  shareOtherApps: "වෙනත් ඇප්...",
   whatsAppMessage: (code, url) =>
     `එන්න ඕමි අතක් ගහමු! 🃏\nකාමර කේතය: ${code}\nමෙතැනින් එන්න: ${url}`,
   roomLobby: "ඕමි කාමරය",
@@ -467,6 +484,10 @@ const si: I18nDict = {
   roomFull: "අසුන් 4ම දැනටමත් පිරිලා.",
   spectatorNotice: "බලාගෙන ඉන්නවා",
   backHome: "මුල් පිටුවට",
+  chatTabEmotes: "චැට්",
+  chatTabMemes: "මීම්ස්",
+  memeCooldownNotice: (sec) => `පොඩ්ඩක් ඉන්න: ${sec}ත.`,
+  memeSentBy: (name) => `${name} මීම් එකක් දැම්මා`,
   emotes: {
     niceCut: { label: "නියම කැපිල්ල!", emoji: "✂️" },
     kapothiIncoming: { label: "කපෝති එනවා!", emoji: "🔥" },

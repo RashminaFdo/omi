@@ -9,6 +9,7 @@ import { LobbyView } from "@/components/LobbyView";
 import { TableBackdrop } from "@/components/TableBackdrop";
 import { TopBar } from "@/components/TopBar";
 import { ensureAnonymousUser } from "@/lib/firebase";
+import { preloadAllMemes } from "@/lib/memes";
 import {
   chooseBotCard,
   chooseBotTrumpDecision,
@@ -57,6 +58,11 @@ export default function RoomPage({
   const [tempName, setTempName] = useState("");
   const [joiningSeat, setJoiningSeat] = useState(false);
   const hasAttemptedAutoJoin = useRef(false);
+
+  // 0. Preload all 6 meme videos into local browser memory Blob URLs for instant 0ms playback!
+  useEffect(() => {
+    preloadAllMemes();
+  }, []);
 
   // 1. Authenticate anonymously & subscribe to room RTDB state
   useEffect(() => {

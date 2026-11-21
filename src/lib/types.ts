@@ -120,6 +120,22 @@ export type EmoteKey =
   | "hurryUp"
   | "goodGame";
 
+export type MemeId =
+  | "asiyath"
+  | "ado"
+  | "ammatahudu"
+  | "heyyy"
+  | "kanawa"
+  | "kaputu";
+
+export interface MemeEvent {
+  id: string;
+  seat: SeatIndex;
+  senderName: string;
+  memeId: MemeId;
+  timestamp: number;
+}
+
 export interface RoomData {
   code: string;
   hostUid: string;
@@ -131,6 +147,7 @@ export interface RoomData {
   seats: Record<string, SeatPlayer | null>; // keys "0", "1", "2", "3"
   game: GameState | null;
   emotes?: Record<string, EmoteEvent>;
+  activeMeme?: MemeEvent | null;
 }
 
 export type Language = "en" | "si";

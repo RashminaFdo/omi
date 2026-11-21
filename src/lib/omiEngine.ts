@@ -105,6 +105,81 @@ export function sortHand(cards: Card[], trumpSuit: Suit | null = null): Card[] {
 }
 
 /**
+ * Fair-Play Trump Strength Rule:
+ * A player's trump hand is considered too weak to play if:
+ * - They have 0 trump cards, OR
+ * - They have 2 or fewer trump cards AND all of them are strictly below Jack (10, 9, 8, 7).
+ */
+export function isPlayerTrumpWeak(hand: Card[], trumpSuit: Suit): boolean {
+  const trumps = hand.filter((c) => c.suit === trumpSuit);
+  if (trumps.length === 0) return true;
+  if (trumps.length <= 2) {
+    return trumps.every((c) => RANK_VALUE[c.rank] < RANK_VALUE["J"]);
+  }
+  return false;
+}
+
+/**
+ * A team (Seats 0 & 2 for Team A, Seats 1 & 3 for Team B) can play the hand
+ * if AT LEAST ONE teammate has a playable trump holding (not weak).
+ * If one teammate has no trumps, it is completely fine as long as their partner can play!
+ */
+export function isTeamPlayableForTrump(
+  seat1Hand: Card[],
+  seat2Hand: Card[],
+  trumpSuit: Suit
+): boolean {
+  return (
+    !isPlayerTrumpWeak(seat1Hand, trumpSuit) ||
+    !isPlayerTrumpWeak(seat2Hand, trumpSuit)
+  );
+}
+
+/**
+ * Randomly deals the remaining unseen cards (preserving any already-seen cards like
+ * the selector's first 4 cards and any revealed blind 5th-8th card) while guaranteeing
+ * BOTH teams have a fair, playable trump distribution.
+ */
+function dealRemainingHandsFairly(
+  fixedHands: Record<string, Card[]>,
+  unseenPool: Card[],
+  trumpSuit: Suit
+): Record<string, Card[]> {
+  const buildFromPool = (pool: Card[]): Record<string, Card[]> => {
+    const result: Record<string, Card[]> = {};
+    let idx = 0;
+    for (const s of ["0", "1", "2", "3"]) {
+      const fixed = fixedHands[s] ?? [];
+      const need = Math.max(0, 8 - fixed.length);
+      result[s] = sortHand([...fixed, ...pool.slice(idx, idx + need)], trumpSuit);
+      idx += need;
+    }
+    return result;
+  };
+
+  // Try up to 80 random Fisher-Yates shuffles of the unseen pool until BOTH teams are playable
+  let candidate = buildFromPool(shuffleDeck(unseenPool));
+  for (let attempt = 0; attempt < 80; attempt++) {
+    const teamAOk = isTeamPlayableForTrump(
+      candidate["0"],
+      candidate["2"],
+      trumpSuit
+    );
+    const teamBOk = isTeamPlayableForTrump(
+      candidate["1"],
+      candidate["3"],
+      trumpSuit
+    );
+    if (teamAOk && teamBOk) {
+      return candidate;
+    }
+    candidate = buildFromPool(shuffleDeck(unseenPool));
+  }
+
+  return candidate;
+}
+
+/**
  * Authentic Sri Lankan Omi Stage 1 Deal:
  * - Shuffles 32-card deck.
  * - Deals ONLY the first 4 cards to the Trump Selector (dealer's anti-clockwise right).
@@ -197,12 +272,20 @@ export function applyTrumpSelection(
     throw new Error("Only the trump caller may choose the trump suit.");
   }
 
-  const mergedHands: Record<string, Card[]> = {};
+  // Selector's first 4 cards are already seen; randomly deal all 28 unseen cards
+  // so BOTH teams have a fair, playable trump holding!
+  const fixedHands: Record<string, Card[]> = {
+    "0": [...(state.hands?.["0"] ?? [])],
+    "1": [...(state.hands?.["1"] ?? [])],
+    "2": [...(state.hands?.["2"] ?? [])],
+    "3": [...(state.hands?.["3"] ?? [])],
+  };
+  const unseenPool: Card[] = [];
   for (const s of ["0", "1", "2", "3"]) {
-    const existing = state.hands?.[s] ?? [];
-    const rest = state.pendingSecondDeal?.[s] ?? [];
-    mergedHands[s] = sortHand([...existing, ...rest], suit);
+    unseenPool.push(...(state.pendingSecondDeal?.[s] ?? []));
   }
+
+  const mergedHands = dealRemainingHandsFairly(fixedHands, unseenPool, suit);
 
   return {
     ...state,
@@ -257,8 +340,8 @@ export function applyBlindTrumpCardSelection(
 
 /**
  * After everyone has seen the revealed 5th/6th/7th/8th trump card,
- * deal all remaining cards to every player (8 cards each) and start Trick 1
- * with the trump caller leading.
+ * deal all remaining unseen cards fairly (keeping selector's first 4 + revealed card fixed!)
+ * so BOTH teams have a fair, playable trump holding, then start Trick 1.
  */
 export function finalizeBlindTrumpDeal(
   state: GameState,
@@ -268,12 +351,34 @@ export function finalizeBlindTrumpDeal(
     return state;
   }
 
-  const mergedHands: Record<string, Card[]> = {};
-  for (const s of ["0", "1", "2", "3"]) {
-    const existing = state.hands?.[s] ?? [];
-    const rest = state.pendingSecondDeal?.[s] ?? [];
-    mergedHands[s] = sortHand([...existing, ...rest], state.trumpSuit);
+  const callerKey = String(state.trumpCaller);
+  const revealed = state.revealedTrumpCard;
+
+  const fixedHands: Record<string, Card[]> = {
+    "0": [...(state.hands?.["0"] ?? [])],
+    "1": [...(state.hands?.["1"] ?? [])],
+    "2": [...(state.hands?.["2"] ?? [])],
+    "3": [...(state.hands?.["3"] ?? [])],
+  };
+
+  if (revealed && !fixedHands[callerKey].some((c) => c.id === revealed.id)) {
+    fixedHands[callerKey].push(revealed);
   }
+
+  const unseenPool: Card[] = [];
+  for (const s of ["0", "1", "2", "3"]) {
+    const rest = state.pendingSecondDeal?.[s] ?? [];
+    for (const c of rest) {
+      if (revealed && c.id === revealed.id) continue;
+      unseenPool.push(c);
+    }
+  }
+
+  const mergedHands = dealRemainingHandsFairly(
+    fixedHands,
+    unseenPool,
+    state.trumpSuit
+  );
 
   return {
     ...state,
